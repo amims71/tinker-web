@@ -1,0 +1,89 @@
+#!/usr/bin/env php
+<?php
+
+use Amims71\TinkerWeb\Connections\ConnectionStore;
+use Amims71\TinkerWeb\Runner\RunnerBridge;
+use Amims71\TinkerWeb\Server;
+use Amims71\TinkerWeb\Web\TokenGuard;
+
+foreach ([__DIR__.'/../vendor/autoload.php', __DIR__.'/../../../autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+$root = dirname(__DIR__);
+
+// --- parse args: [project] [--port=N] [--no-open] ---
+$args = array_slice($argv, 1);
+$port = 0;
+$open = true;
+$project = null;
+
+foreach ($args as $arg) {
+    if (str_starts_with($arg, '--port=')) {
+        $port = (int) substr($arg, 7);
+    } elseif ($arg === '--no-open') {
+        $open = false;
+    } elseif (! str_starts_with($arg, '--')) {
+        $project = $arg;
+    }
+}
+
+$connections = ConnectionStore::default();
+
+$project = $project !== null ? rtrim($project, '/') : getcwd();
+if ($project !== false && $connections->isValidProject($project)) {
+    $connections->remember($project);
+}
+
+// --- bind loopback socket, discover the ephemeral port ---
+$socket = @stream_socket_server("tcp://127.0.0.1:{$port}", $errno, $errstr);
+if ($socket === false) {
+    fwrite(STDERR, "tinker-web: could not bind 127.0.0.1:{$port} — {$errstr}\n");
+    exit(1);
+}
+$boundPort = (int) substr(strrchr(stream_socket_get_name($socket, false), ':'), 1);
+
+$guard = TokenGuard::random($boundPort);
+$bridge = new RunnerBridge(PHP_BINARY, $root.'/src/Runner/runner.php');
+$server = new Server($guard, $bridge, $connections, $root.'/resources');
+
+$url = "http://127.0.0.1:{$boundPort}/?t=".$guard->token();
+
+if (function_exists('pcntl_async_signals')) {
+    pcntl_async_signals(true);
+    foreach ([SIGINT, SIGTERM] as $sig) {
+        pcntl_signal($sig, static function () use ($server, $socket): void {
+            $server->stop();
+            @fclose($socket);
+            fwrite(STDOUT, "\ntinker-web: stopped.\n");
+            exit(0);
+        });
+    }
+}
+
+fwrite(STDOUT, "\n  tinker-web — a local scratchpad for any PHP project\n");
+fwrite(STDOUT, "  Serving:  {$url}\n");
+if ($project !== false) {
+    fwrite(STDOUT, "  Project:  {$project}\n");
+}
+fwrite(STDOUT, "  Press Ctrl-C to stop.\n\n");
+
+if ($open) {
+    $opener = match (PHP_OS_FAMILY) {
+        'Darwin' => ['open', $url],
+        'Windows' => ['cmd', '/c', 'start', '', $url],
+        default => ['xdg-open', $url],
+    };
+    $proc = @proc_open($opener, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+    if (is_resource($proc)) {
+        foreach ($pipes as $p) {
+            @fclose($p);
+        }
+        proc_close($proc);
+    }
+}
+
+$server->run($socket);

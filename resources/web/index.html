@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tinker-web</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">tinker<span>-web</span></div>
+    <div class="conn">
+      <select id="project" title="Target project"></select>
+      <input id="add-path" type="text" placeholder="/path/to/laravel/app" spellcheck="false">
+      <button id="add-btn" type="button">Add</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="hint"><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>↵</kbd> to run</div>
+    <button id="run-btn" type="button" class="run">Run ▸</button>
+  </header>
+
+  <main class="split">
+    <section class="pane editor-pane">
+      <textarea id="editor" spellcheck="false" autofocus>User::count()</textarea>
+    </section>
+    <section class="pane output-pane">
+      <div id="output" class="output"><div class="placeholder">Results appear here. Write PHP, hit Run.</div></div>
+    </section>
+  </main>
+
+  <footer class="statusbar">
+    <span id="status">ready</span>
+    <span class="spacer"></span>
+    <span id="laravel"></span>
+  </footer>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
