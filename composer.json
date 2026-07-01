@@ -1,0 +1,32 @@
+{
+    "name": "amims71/tinker-web",
+    "description": "A standalone local web scratchpad for any PHP/Laravel project — write PHP in your browser and evaluate it against any local app, no per-project install required.",
+    "keywords": ["laravel", "tinker", "repl", "scratchpad", "psysh", "php"],
+    "license": "MIT",
+    "type": "project",
+    "bin": ["bin/tinker-web"],
+    "require": {
+        "php": "^8.2"
+    },
+    "require-dev": {
+        "pestphp/pest": "^2|^3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Amims71\\TinkerWeb\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Amims71\\TinkerWeb\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
