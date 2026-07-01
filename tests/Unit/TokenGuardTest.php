@@ -35,6 +35,14 @@ it('rejects a foreign Host header (DNS-rebinding guard)', function () {
         ->and($guard->allows(req("GET /?t=secret HTTP/1.1\r\nHost: 127.0.0.1:9999")))->toBeFalse();
 });
 
+it('allows the token via the session cookie (how the browser loads sub-resources)', function () {
+    $guard = new TokenGuard('secret', 8000);
+
+    expect($guard->allows(req("GET /assets/app.css HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nCookie: tw_token=secret")))->toBeTrue()
+        ->and($guard->allows(req("GET /assets/app.js HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nCookie: a=1; tw_token=secret; b=2")))->toBeTrue()
+        ->and($guard->allows(req("GET /assets/app.css HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nCookie: tw_token=wrong")))->toBeFalse();
+});
+
 it('generates a 64-hex-char random token', function () {
     expect(TokenGuard::random(8000)->token())->toMatch('/^[a-f0-9]{64}$/');
 });

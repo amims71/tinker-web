@@ -97,7 +97,7 @@ final class Server
         }
 
         return match (true) {
-            $request->method === 'GET' && $request->path === '/' => $this->serveFile('web/index.html'),
+            $request->method === 'GET' && $request->path === '/' => $this->serveSpa(),
             $request->method === 'GET' && str_starts_with($request->path, '/assets/') => $this->serveAsset($request->path),
             $request->method === 'GET' && $request->path === '/connections' => Response::json(['connections' => $this->connections->all()]),
             $request->method === 'POST' && $request->path === '/connections' => $this->addConnection($request),
@@ -134,14 +134,19 @@ final class Server
         return Response::json(['connections' => $this->connections->all()]);
     }
 
-    private function serveFile(string $relative): Response
+    private function serveSpa(): Response
     {
-        $path = $this->resourcesDir.'/'.$relative;
+        $path = $this->resourcesDir.'/web/index.html';
         if (! is_file($path)) {
-            return Response::json(['ok' => false, 'error' => ['message' => 'Missing '.$relative]], 404);
+            return Response::json(['ok' => false, 'error' => ['message' => 'Missing web/index.html']], 404);
         }
 
-        return Response::make((string) file_get_contents($path), $this->contentType($path));
+        // Set the token as a cookie so the browser's sub-resource requests (css/js/eval) carry it
+        // automatically — a <link>/<script> tag can't inherit the ?t= from the page URL.
+        return new Response(200, (string) file_get_contents($path), [
+            'Content-Type' => 'text/html; charset=utf-8',
+            'Set-Cookie' => TokenGuard::COOKIE.'='.$this->guard->token().'; Path=/; SameSite=Strict; HttpOnly',
+        ]);
     }
 
     private function serveAsset(string $path): Response
