@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tinker-web — a local browser scratchpad for any Laravel app</title>
+<meta name="description" content="Run tinker-web, point it at any local Laravel project, and evaluate PHP against that app from a browser editor. Standalone, local-only, nothing to install per-project.">
+<style>
+  :root{
+    --bg:#0e1116; --panel:#151a21; --panel2:#1b2029; --border:#262d38;
+    --text:#d7dde5; --muted:#8b95a3; --accent:#6cc7ff; --accent2:#7ee787;
+    --num:#f0a868; --err:#ff7b72; --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:960px;margin:0 auto;padding:0 20px}
+  code,kbd,pre{font-family:var(--mono)}
+  kbd{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:12px}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:10;background:rgba(14,17,22,.85);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border)}
+  nav .wrap{display:flex;align-items:center;gap:18px;height:56px}
+  .logo{font-weight:800;letter-spacing:.3px}
+  .logo span{color:var(--accent)}
+  nav .links{margin-left:auto;display:flex;gap:18px;font-size:14px}
+  @media(max-width:640px){nav .links a.hide{display:none}}
+
+  /* hero */
+  header.hero{padding:72px 0 48px;text-align:center;
+    background:radial-gradient(1000px 400px at 50% -120px,rgba(108,199,255,.12),transparent)}
+  .pill{display:inline-block;font-size:12px;color:var(--accent);border:1px solid var(--border);
+    background:var(--panel);border-radius:999px;padding:4px 12px;margin-bottom:18px}
+  h1{font-size:clamp(34px,6vw,56px);line-height:1.05;margin:0 0 14px;letter-spacing:-1px}
+  h1 span{color:var(--accent)}
+  .lead{font-size:clamp(17px,2.4vw,21px);color:var(--muted);max-width:640px;margin:0 auto 26px}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;align-items:center}
+  .install{display:inline-flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);
+    border-radius:10px;padding:11px 16px;font-family:var(--mono);font-size:14px}
+  .install .p{color:var(--accent2)}
+  .btn{background:var(--accent);color:#05233a;font-weight:700;border-radius:10px;padding:11px 18px;border:1px solid var(--accent)}
+  .btn:hover{text-decoration:none;filter:brightness(1.06)}
+  .btn.ghost{background:transparent;color:var(--text);border-color:var(--border)}
+
+  section{padding:52px 0;border-top:1px solid var(--border)}
+  h2{font-size:clamp(24px,3.6vw,32px);margin:0 0 8px;letter-spacing:-.5px}
+  .sub{color:var(--muted);margin:0 0 28px;max-width:680px}
+
+  /* flow */
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:760px){.flow{grid-template-columns:1fr 1fr}}
+  .step{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .step .n{color:var(--accent);font-family:var(--mono);font-size:12px}
+  .step h3{margin:6px 0 6px;font-size:15px}
+  .step p{margin:0;color:var(--muted);font-size:13.5px}
+
+  /* features */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px}
+  .card h3{margin:0 0 6px;font-size:17px}
+  .card h3 .ic{color:var(--accent);margin-right:8px}
+  .card p{margin:0;color:var(--muted);font-size:14.5px}
+
+  /* mock browser */
+  .browser{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .chrome{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--panel2)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
+  .addr{margin-left:10px;flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;
+    padding:5px 12px;color:var(--muted);font-family:var(--mono);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ui{display:grid;grid-template-columns:1fr 1fr;min-height:230px}
+  @media(max-width:640px){.ui{grid-template-columns:1fr}}
+  .ui .side{padding:16px;font-family:var(--mono);font-size:13px;line-height:1.7;overflow:auto}
+  .ui .ed{border-right:1px solid var(--border)}
+  @media(max-width:640px){.ui .ed{border-right:none;border-bottom:1px solid var(--border)}}
+  .ui .out{background:var(--panel)}
+  .cmt{color:var(--muted)}.kw{color:#ff7b72}.fn{color:var(--accent)}.str{color:var(--accent2)}.num{color:var(--num)}
+  .reslabel{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  .resbox{border-left:3px solid var(--accent2);background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--accent2);border-radius:8px;padding:10px 12px;margin-top:6px}
+
+  pre.block{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;overflow-x:auto;font-size:13.5px;line-height:1.7}
+  .lock{display:flex;gap:12px;align-items:flex-start;margin:10px 0}
+  .lock .k{color:var(--accent);font-family:var(--mono);flex:0 0 auto}
+  footer{border-top:1px solid var(--border);padding:36px 0 60px;color:var(--muted);font-size:14px}
+  footer .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+  .soon{font-size:11px;color:var(--num);border:1px solid var(--border);border-radius:999px;padding:1px 8px;margin-left:8px}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="logo">tinker<span>-web</span></div>
+  <div class="links">
+    <a class="hide" href="#how">How it works</a>
+    <a class="hide" href="#features">Features</a>
+    <a class="hide" href="#install">Install</a>
+    <a href="https://github.com/amims71/tinker-web">GitHub ↗</a>
+  </div>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="pill">local · one tool, any project</div>
+  <h1>A browser scratchpad for <span>any</span> Laravel app.</h1>
+  <p class="lead">Run one command, point it at any local Laravel project, and evaluate PHP against that
+    app's booted container — right in your browser. No package to install per project.</p>
+  <div class="cta">
+    <span class="install"><span class="p">$</span> composer global require amims71/tinker-web</span>
+    <a class="btn" href="#install">Get started</a>
+    <a class="btn ghost" href="https://github.com/amims71/tinker-web">View source</a>
+  </div>
+</div></header>
+
+<section id="how"><div class="wrap">
+  <h2>How it works</h2>
+  <p class="sub">tinker-web is a tiny standalone PHP tool — no runtime dependencies. It talks to the
+    target app through a fresh runner process, so it works with any project and clashes with none.</p>
+  <div class="flow">
+    <div class="step"><div class="n">01</div><h3>Run it</h3><p><code>tinker-web ~/code/app</code> starts a local server on <code>127.0.0.1</code> and opens your browser.</p></div>
+    <div class="step"><div class="n">02</div><h3>Write PHP</h3><p>Type in the editor, press <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>↵</kbd>. The code is sent to the local server.</p></div>
+    <div class="step"><div class="n">03</div><h3>Runner boots the target</h3><p>A fresh subprocess <code>require</code>s the project's autoloader, boots that app, and evaluates your snippet in its context.</p></div>
+    <div class="step"><div class="n">04</div><h3>Rendered back</h3><p>Output and the return value — rendered with the target's own VarDumper + Tinker casters — appear instantly.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>See it</h2>
+  <p class="sub">The whole loop: editor on the left, evaluated result on the right — against a real app.</p>
+  <div class="browser">
+    <div class="chrome">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="addr">127.0.0.1:51488/?t=•••••  —  tinker-web · ~/code/app</span>
+    </div>
+    <div class="ui">
+      <div class="side ed"><span class="cmt">// eval against the booted app</span><br>
+        <span class="fn">User</span>::<span class="fn">query</span>()<br>
+        &nbsp;&nbsp;-><span class="fn">where</span>(<span class="str">'active'</span>, <span class="num">1</span>)<br>
+        &nbsp;&nbsp;-><span class="fn">pluck</span>(<span class="str">'email'</span>)<br>
+        &nbsp;&nbsp;-><span class="fn">take</span>(<span class="num">2</span>);
+      </div>
+      <div class="side out">
+        <div class="reslabel">result · 41ms · Laravel 12.54</div>
+        <div class="resbox"><span class="fn">Illuminate\Support\Collection</span> {<br>
+          &nbsp;&nbsp;all: [<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="num">0</span> => <span class="str">"jane@example.com"</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="num">1</span> => <span class="str">"amir@example.com"</span><br>
+          &nbsp;&nbsp;]<br>}
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section id="features"><div class="wrap">
+  <h2>Features</h2>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">◆</span>Works with any project</h3><p>Point it at any local Laravel app by path. The target needs nothing installed — the runner bootstraps it and uses its own PsySH/Tinker if present, with a plain-eval fallback otherwise.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Rich result rendering</h3><p>Return values render with the target's <code>symfony/var-dumper</code> and Laravel Tinker casters, so Eloquent models and collections read cleanly. Echoed output is captured separately.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Local &amp; locked down</h3><p>Binds <code>127.0.0.1</code> only, requires a random per-session token, and enforces a Host-header allowlist against DNS-rebinding. Your machine, your apps.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Connection manager</h3><p>Switch between projects from the toolbar; recent projects are remembered. One running tool, many apps.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Process-isolated</h3><p>Each run is a fresh subprocess rooted in the target — clean state every time, and a crashing eval can never take the server down.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Zero runtime deps</h3><p>Pure PHP 8.2+ core (<code>stream_socket_server</code> + <code>proc_open</code>). Fast to install, nothing to conflict with.</p></div>
+  </div>
+</div></section>
+
+<section id="install"><div class="wrap">
+  <h2>Install &amp; run</h2>
+  <p class="sub">Requires PHP 8.2+. A local Laravel app to target (any version).</p>
+  <pre class="block"><span class="cmt"># global install — then ensure your composer global bin is on PATH</span>
+composer global require amims71/tinker-web
+
+<span class="cmt"># or clone and run directly</span>
+git clone https://github.com/amims71/tinker-web &amp;&amp; cd tinker-web &amp;&amp; composer install
+php bin/tinker-web /path/to/app
+
+<span class="cmt"># usage</span>
+tinker-web                 <span class="cmt"># target the current directory</span>
+tinker-web /path/to/app    <span class="cmt"># target a specific project</span>
+tinker-web --port=9000     <span class="cmt"># fixed port (default: ephemeral)</span>
+tinker-web --no-open       <span class="cmt"># don't auto-open the browser</span></pre>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Security</h2>
+  <p class="sub">tinker-web executes arbitrary PHP against the target app, so it is deliberately local-only. Run it on your own machine, against apps you trust.</p>
+  <div class="lock"><span class="k">127.0.0.1</span><span>Binds to loopback exclusively — never <code>0.0.0.0</code>.</span></div>
+  <div class="lock"><span class="k">token</span><span>A random per-session token in the URL, compared in constant time.</span></div>
+  <div class="lock"><span class="k">host</span><span>A Host-header allowlist (<code>127.0.0.1</code> / <code>localhost</code>) blunts DNS-rebinding.</span></div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Roadmap</h2>
+  <p class="sub">The engine is done and validated. What's next:</p>
+  <div class="grid">
+    <div class="card"><h3>CodeMirror 6 editor<span class="soon">soon</span></h3><p>A bundled, self-contained editor with PHP syntax highlighting, replacing the MVP textarea.</p></div>
+    <div class="card"><h3>Collapsible result tree<span class="soon">soon</span></h3><p>Render VarDumper's interactive HTML dump for deep, clickable inspection of objects and arrays.</p></div>
+    <div class="card"><h3>Warm runner daemon<span class="soon">soon</span></h3><p>Keep each target booted and fork per eval for instant, sub-boot execution.</p></div>
+    <div class="card"><h3>Production-target guard<span class="soon">soon</span></h3><p>Warn or refuse when a target's <code>APP_ENV</code> is <code>production</code>.</p></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <div class="row">
+    <div class="logo">tinker<span>-web</span></div>
+    <span>MIT licensed</span>
+    <a href="https://github.com/amims71/tinker-web">GitHub</a>
+    <span class="spacer"></span>
+    <span>a companion to <a href="https://github.com/amims71/lara-shell">lara-shell</a></span>
+  </div>
+</div></footer>
+
+</body>
+</html>
