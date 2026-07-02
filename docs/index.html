@@ -122,9 +122,9 @@
     target app through a fresh runner process, so it works with any project and clashes with none.</p>
   <div class="flow">
     <div class="step"><div class="n">01</div><h3>Run it</h3><p><code>tinker-web ~/code/app</code> starts a local server on <code>127.0.0.1</code> and opens your browser.</p></div>
-    <div class="step"><div class="n">02</div><h3>Write PHP</h3><p>Type in the editor, press <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>↵</kbd>. The code is sent to the local server.</p></div>
+    <div class="step"><div class="n">02</div><h3>Write PHP</h3><p>Type and press <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>↵</kbd> — or flip on <strong>Auto-run</strong> to evaluate live as you finish each statement.</p></div>
     <div class="step"><div class="n">03</div><h3>Runner boots the target</h3><p>A fresh subprocess <code>require</code>s the project's autoloader, boots that app, and evaluates your snippet in its context.</p></div>
-    <div class="step"><div class="n">04</div><h3>Rendered back</h3><p>Output and the return value — rendered with the target's own VarDumper + Tinker casters — appear instantly.</p></div>
+    <div class="step"><div class="n">04</div><h3>Rendered back</h3><p>Each statement's output and value come back as <strong>collapsible</strong> VarDumper HTML — <code>dump()</code>/<code>dd()</code> included, and <code>dd()</code> stops the run cleanly.</p></div>
   </div>
 </div></section>
 
@@ -160,7 +160,8 @@
   <h2>Features</h2>
   <div class="grid">
     <div class="card"><h3><span class="ic">◆</span>Works with any project</h3><p>Point it at any local Laravel app by path. The target needs nothing installed — the runner bootstraps it and uses its own PsySH/Tinker if present, with a plain-eval fallback otherwise.</p></div>
-    <div class="card"><h3><span class="ic">◆</span>Rich result rendering</h3><p>Return values render with the target's <code>symfony/var-dumper</code> and Laravel Tinker casters, so Eloquent models and collections read cleanly. Echoed output is captured separately.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Collapsible rich dumps</h3><p>Return values and <code>dump()</code>/<code>dd()</code> render as VarDumper's interactive, <strong>collapsible</strong> HTML with Tinker casters — click to expand Eloquent models and arrays. <code>dd()</code>/<code>exit()</code>/<code>die()</code> stop the run cleanly with a marker; echoed output is captured separately.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Live auto-run &amp; notebook</h3><p>Opt into Auto-run to re-evaluate as you finish each statement. Snippets run as a notebook — each top-level statement gets its own result cell, and state persists within a run.</p></div>
     <div class="card"><h3><span class="ic">◆</span>Local &amp; locked down</h3><p>Binds <code>127.0.0.1</code> only, requires a random per-session token, and enforces a Host-header allowlist against DNS-rebinding. Your machine, your apps.</p></div>
     <div class="card"><h3><span class="ic">◆</span>Connection manager</h3><p>Switch between projects from the toolbar; recent projects are remembered. One running tool, many apps.</p></div>
     <div class="card"><h3><span class="ic">◆</span>Process-isolated</h3><p>Each run is a fresh subprocess rooted in the target — clean state every time, and a crashing eval can never take the server down.</p></div>
@@ -198,7 +199,8 @@ tinker-web --no-open       <span class="cmt"># don't auto-open the browser</span
   <p class="sub">The engine is done and validated. What's next:</p>
   <div class="grid">
     <div class="card"><h3>CodeMirror 6 editor<span class="soon">soon</span></h3><p>A bundled, self-contained editor with PHP syntax highlighting, replacing the MVP textarea.</p></div>
-    <div class="card"><h3>Collapsible result tree</h3><p>Render VarDumper's interactive HTML dump for deep, clickable inspection of objects and arrays.</p></div>
+    <div class="card"><h3>Autocomplete / IntelliSense<span class="soon">soon</span></h3><p>Completion for the target's classes, methods, properties, and variables, powered by reflection over the booted app.</p></div>
+    <div class="card"><h3>Auto-import<span class="soon">soon</span></h3><p>Reference a class unqualified and have the matching <code>use</code> statement added for you.</p></div>
     <div class="card"><h3>Warm runner daemon<span class="soon">soon</span></h3><p>Keep each target booted and fork per eval for instant, sub-boot execution.</p></div>
     <div class="card"><h3>Stateful REPL session<span class="soon">soon</span></h3><p>Keep one long-lived process per target so variables persist across evaluations and each statement runs exactly once — no repeated side effects, like a terminal <code>tinker</code>. Builds on the warm runner daemon.</p></div>
     <div class="card"><h3>Production-target guard<span class="soon">soon</span></h3><p>Warn or refuse when a target's <code>APP_ENV</code> is <code>production</code>.</p></div>

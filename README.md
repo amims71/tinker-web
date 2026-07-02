@@ -45,14 +45,18 @@ php bin/tinker-web /path/to/app
 
 ```bash
 tinker-web                 # target the current directory
+tinker-web .               # same — the current directory (any relative path is resolved)
 tinker-web /path/to/app    # target a specific project
 tinker-web --port=9000     # fixed port (default: an OS-assigned ephemeral port)
 tinker-web --no-open       # don't auto-open the browser
 ```
 
-Add more projects from the toolbar; recent projects are remembered in `~/.config/tinker-web`. Write
-PHP in the editor and press **⌘/Ctrl + ↵** to run. Output and the return value (rendered) appear in
-the results pane; runs stack as history.
+Add more projects from the toolbar; recent projects are remembered in `~/.config/tinker-web`.
+Write PHP in the editor and press **⌘/Ctrl + ↵** to run — or flip on **Auto-run** to re-evaluate
+live as you finish each statement. Snippets run as a **notebook**: each top-level statement becomes
+its own result cell (state persists within a run), and `dump()`/`dd()` output and return values
+render as VarDumper's **collapsible, interactive** HTML — click to expand Eloquent models and
+arrays. `dd()`/`exit()`/`die()` stop the run cleanly with a marker instead of erroring.
 
 ## Security
 
@@ -67,9 +71,8 @@ Only run it on your own machine against apps you trust. Rendering a model shows 
 
 ## Roadmap
 
-- CodeMirror 6 editor (bundled) and collapsible VarDumper HTML result tree.
-- Warm runner daemon per target (instant eval, no per-run boot).
-- Eloquent → sortable tables, autocomplete, saved snippets.
+- CodeMirror 6 editor (bundled) with PHP syntax highlighting, autocomplete/IntelliSense, and auto-import.
+- Warm runner daemon per target, plus a stateful REPL session (variables persist across evals).
 - Refuse/warn when the target's `APP_ENV` is `production`.
 
 ## Testing
