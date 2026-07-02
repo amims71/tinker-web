@@ -6,6 +6,7 @@
     "build:editor": "esbuild resources/editor/editor.src.js --bundle --format=iife --minify --outfile=resources/dist/editor.js"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-php": "^6.0.2",
     "@codemirror/language": "^6.12.4",

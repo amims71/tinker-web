@@ -3,6 +3,7 @@
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState, Prec } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
+import { autocompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { php } from '@codemirror/lang-php';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
@@ -42,7 +43,7 @@ const appHighlight = HighlightStyle.define([
 ]);
 
 window.TinkerEditor = {
-  create(parent, { doc = '', onChange, onRun } = {}) {
+  create(parent, { doc = '', onChange, onRun, complete } = {}) {
     // High precedence so Mod-Enter beats basicSetup's default binding.
     const runKey = Prec.highest(
       keymap.of([{ key: 'Mod-Enter', preventDefault: true, run: () => { if (onRun) onRun(); return true; } }])
@@ -58,6 +59,7 @@ window.TinkerEditor = {
           php({ plain: true }), // parse the whole doc as PHP (our snippets have no <?php tag)
           appTheme,
           syntaxHighlighting(appHighlight),
+          ...(complete ? [autocompletion({ override: [complete] })] : []),
           EditorView.updateListener.of((u) => { if (u.docChanged && onChange) onChange(); }),
         ],
       }),

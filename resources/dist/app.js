@@ -20,6 +20,79 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+// --- completion data (fetched once per project, cached) ---
+let classList = [];
+const memberCache = new Map();
+const KEYWORDS = ['return','function','fn','use','new','match','foreach','for','while','if','else','elseif','switch','case','throw','class','static','public','private','protected','instanceof','array','null','true','false'];
+
+async function loadSymbols(project) {
+  if (!project) { classList = []; return; }
+  try {
+    const r = await api('/symbols', { method: 'POST', body: JSON.stringify({ project }) });
+    classList = r && r.ok ? r.classes : [];
+  } catch (e) { classList = []; }
+}
+
+async function loadMembers(project, fqcn) {
+  const key = project + '|' + fqcn;
+  if (memberCache.has(key)) return memberCache.get(key);
+  let members = [];
+  try {
+    const r = await api('/members', { method: 'POST', body: JSON.stringify({ project, class: fqcn }) });
+    members = r && r.ok ? r.members : [];
+  } catch (e) { members = []; }
+  memberCache.set(key, members);
+  return members;
+}
+
+function classRank(fqcn) { return fqcn.startsWith('App\\') ? 0 : fqcn.startsWith('Illuminate\\') ? 1 : 2; }
+
+// Resolve `Name`/`\Ns\Name` before `::` to an FQCN using the buffer's use-statements. Null = unresolved.
+function resolveClass(name, doc) {
+  name = name.replace(/^\\/, '');
+  if (name.includes('\\')) return name;
+  let m = doc.match(new RegExp('use\\s+([\\w\\\\]*\\\\' + name + ')\\s*;'));
+  if (m) return m[1];
+  m = doc.match(new RegExp('use\\s+([\\w\\\\]+)\\s+as\\s+' + name + '\\s*;'));
+  if (m) return m[1];
+  return null;
+}
+
+// CM6 completion source: static members after `::`, then $variables, then class names + keywords.
+async function phpComplete(context) {
+  const doc = context.state.doc.toString();
+  const before = doc.slice(0, context.pos);
+
+  const staticM = before.match(/([A-Za-z_\\][\w\\]*)::(\w*)$/);
+  if (staticM) {
+    const fqcn = resolveClass(staticM[1], doc);
+    if (fqcn && projectSel.value) {
+      const members = await loadMembers(projectSel.value, fqcn);
+      const kindType = { method: 'method', const: 'constant', property: 'property' };
+      return { from: context.pos - staticM[2].length, options: members.map((m) => ({ label: m.name, type: kindType[m.kind] || 'text' })) };
+    }
+    return null;
+  }
+
+  const varM = context.matchBefore(/\$[A-Za-z_]\w*/);
+  if (varM) {
+    const names = [...new Set(doc.match(/\$[A-Za-z_]\w*/g) || [])];
+    return { from: varM.from, options: names.map((n) => ({ label: n, type: 'variable' })) };
+  }
+
+  const idM = context.matchBefore(/[A-Za-z_\\][\w\\]*/);
+  if (idM && idM.text) {
+    const q = idM.text.replace(/^\\/, '').toLowerCase();
+    const matches = classList.filter((c) => c.toLowerCase().includes(q));
+    matches.sort((a, b) => classRank(a) - classRank(b) || a.length - b.length);
+    const options = matches.slice(0, 50).map((c) => ({ label: c, type: 'class', apply: '\\' + c }));
+    for (const k of KEYWORDS) if (k.startsWith(q)) options.push({ label: k, type: 'keyword' });
+    return options.length ? { from: idM.from, options } : null;
+  }
+
+  return null;
+}
+
 function options(connections) {
   return connections.length
     ? connections.map((p) => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('')
@@ -181,6 +254,7 @@ autorunEl.addEventListener('change', () => {
 // --- editor: CodeMirror 6 via the vendored bundle (owns ⌘/Ctrl+↵, Tab, and change events) ---
 const editorApi = TinkerEditor.create(editorEl, {
   doc: 'User::count()',
+  complete: phpComplete,
   onRun: () => run(false),
   onChange: () => {
     if (!autorunEl.checked) return;
@@ -192,4 +266,5 @@ const editorApi = TinkerEditor.create(editorEl, {
 });
 editorApi.focus();
 
-loadConnections();
+loadConnections().then(() => loadSymbols(projectSel.value));
+projectSel.addEventListener('change', () => { memberCache.clear(); loadSymbols(projectSel.value); });
