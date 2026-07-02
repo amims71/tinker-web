@@ -20,7 +20,16 @@ $in = json_decode($raw, true) ?: [];
 $project = rtrim((string) ($in['project'] ?? ''), '/');
 $code = (string) ($in['code'] ?? '');
 
-$respond = function (array $envelope): never {
+// Shared run state so the shutdown net can tell a normal/gated response from an uncaught halt.
+$run = new class {
+    /** @var array<int,array<string,mixed>> */
+    public array $cells = [];
+    public bool $responded = false;
+    public string $laravel = '';
+};
+
+$respond = function (array $envelope) use ($run): never {
+    $run->responded = true; // every explicit response marks us done, so the shutdown net stays silent
     fwrite(STDOUT, json_encode($envelope, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
     exit(0);
 };
@@ -142,18 +151,12 @@ function tinkerweb_notebook(array $__statements, callable $__render, object $__d
     }
 }
 
-// Shared run state so the shutdown net can report cells accumulated before a dd()/exit()/die().
-$run = new class {
-    /** @var array<int,array<string,mixed>> */
-    public array $cells = [];
-    public bool $responded = false;
-    public string $laravel = '';
-};
+// The run-state holder is created up top (so $respond can flag it); just record the version here.
 $run->laravel = $app->version();
 
 register_shutdown_function(static function () use ($run, $dumpSink): void {
     if ($run->responded) {
-        return; // normal path already emitted the envelope
+        return; // a normal or gated response already emitted the envelope
     }
     // dd()/exit()/die() (or a fatal) terminated mid-run. Drain buffered output so PHP does not
     // flush it raw into our stdout, and capture the halted statement's plain output.
@@ -161,6 +164,8 @@ register_shutdown_function(static function () use ($run, $dumpSink): void {
     while (ob_get_level() > 0) {
         $out .= (string) ob_get_clean();
     }
+    // Best-effort: a debug target's own fatal renderer (Whoops/Collision) registers its shutdown
+    // handler during bootstrap and may run before this one, so a genuine fatal can still bypass us.
     $fatal = error_get_last();
     if ($fatal !== null && in_array($fatal['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
         fwrite(STDOUT, json_encode(['ok' => false, 'kind' => 'runner-error', 'cells' => $run->cells, 'error' => ['class' => 'FatalError', 'message' => $fatal['message']]], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
@@ -196,7 +201,6 @@ tinkerweb_notebook(StatementSplitter::split($code), $render, $dumpSink, $run);
 
 restore_error_handler();
 
-$run->responded = true;
 $respond([
     'ok' => true,
     'kind' => 'value',
