@@ -152,7 +152,7 @@ Run:
 npm run build:editor
 ```
 
-Expected: `resources/dist/editor.js` written (a minified IIFE, ~300–400KB).
+Expected: `resources/dist/editor.js` written (a minified IIFE, ~647KB un-gzipped).
 
 - [ ] **Step 6: Verify the built bundle**
 

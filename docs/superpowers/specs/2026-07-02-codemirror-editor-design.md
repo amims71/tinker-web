@@ -168,7 +168,7 @@ editorApi.focus();
 - Adds a **dev-time npm/esbuild build** (first in the repo), run in CI (or locally), solely to
   regenerate the vendored editor bundle. Runtime and end users still need only PHP; `node_modules/`
   is not committed, and the browser never loads the editor from a remote origin.
-- The committed `editor.js` is ~300–400 KB minified (CM6 + lang-php). Acceptable for a local tool,
+- The committed `editor.js` is ~647 KB minified/un-gzipped (CM6 + lang-php). Acceptable for a local tool,
   browser-cached after first load.
 - `indentWithTab` captures Tab for indentation (a known CM6 accessibility trade-off) — it matches
   the current textarea behavior, so no regression.
