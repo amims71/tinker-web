@@ -75,6 +75,7 @@ $render = function ($value) use ($casters): array {
 
 // dump()/dd() default to writing straight to php://stdout, which — unlike echo — ob_start()
 // cannot intercept; route them through $render+echo instead so the output lands in the cell.
+unset($_SERVER['VAR_DUMPER_FORMAT']); // else setHandler() no-ops and dump() writes raw to stdout, corrupting our JSON
 \Symfony\Component\VarDumper\VarDumper::setHandler(static function ($value) use ($render): void {
     echo $render($value)['text'], "\n";
 });

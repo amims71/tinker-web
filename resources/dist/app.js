@@ -56,7 +56,7 @@ function render(env, ms) {
 
   if (!env.ok) {
     // non-user failure (bad project / runner crash)
-    block.className = 'run err';
+    block.className = 'run-block err';
     const e = env.error || {};
     block.innerHTML = `<div class="result err"><pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre></div>`;
     setStatus(`error · ${ms}ms`, true);
@@ -76,7 +76,7 @@ function render(env, ms) {
   } else {
     block.innerHTML = '<div class="result ok"><pre class="note">✓ (no statements)</pre></div>';
   }
-  block.className = 'run ' + (ok ? 'ok' : 'err');
+  block.className = 'run-block ' + (ok ? 'ok' : 'err');
   setStatus(ok ? `ok · ${ms}ms` : `error · ${ms}ms`, !ok);
   return placeBlock(block);
 }
