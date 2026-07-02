@@ -14,7 +14,7 @@ $ tinker-web ~/code/my-app
 
 ## How it works
 
-- A tiny **local HTTP server** (127.0.0.1 only, single-user) serves a CodeMirror-style editor.
+- A tiny **local HTTP server** (127.0.0.1 only, single-user) serves a browser UI with a CodeMirror 6 editor (PHP syntax highlighting).
 - Each run spawns a **fresh PHP runner rooted in the target project** — it `require`s the target's
   `vendor/autoload.php`, boots that app, evaluates your snippet, and renders the result with the
   target's own `symfony/var-dumper` + Laravel Tinker casters (so Eloquent models/collections read
@@ -71,7 +71,7 @@ Only run it on your own machine against apps you trust. Rendering a model shows 
 
 ## Roadmap
 
-- CodeMirror 6 editor (bundled) with PHP syntax highlighting, autocomplete/IntelliSense, and auto-import.
+- Autocomplete/IntelliSense and auto-import in the editor (reflection over the booted target app).
 - Warm runner daemon per target, plus a stateful REPL session (variables persist across evals).
 - Refuse/warn when the target's `APP_ENV` is `production`.
 
