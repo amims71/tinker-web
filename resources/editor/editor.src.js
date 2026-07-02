@@ -3,6 +3,7 @@
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState, Prec } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
+import { autocompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { php } from '@codemirror/lang-php';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
@@ -25,6 +26,14 @@ const appTheme = EditorView.theme(
       backgroundColor: 'rgba(108,199,255,0.2)', outline: 'none',
     },
     '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--mono)' },
+    '.cm-tooltip.cm-tooltip-autocomplete': {
+      background: 'var(--panel2)', border: '1px solid var(--border)', borderRadius: '6px',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--mono)', maxHeight: '16em' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { color: 'var(--text)', padding: '2px 6px' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { background: 'var(--accent)', color: '#05233a' },
+    '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal' },
+    '.cm-completionMatchedText': { color: 'var(--accent)', textDecoration: 'none', fontWeight: '700' },
   },
   { dark: true }
 );
@@ -42,7 +51,7 @@ const appHighlight = HighlightStyle.define([
 ]);
 
 window.TinkerEditor = {
-  create(parent, { doc = '', onChange, onRun } = {}) {
+  create(parent, { doc = '', onChange, onRun, complete } = {}) {
     // High precedence so Mod-Enter beats basicSetup's default binding.
     const runKey = Prec.highest(
       keymap.of([{ key: 'Mod-Enter', preventDefault: true, run: () => { if (onRun) onRun(); return true; } }])
@@ -58,6 +67,7 @@ window.TinkerEditor = {
           php({ plain: true }), // parse the whole doc as PHP (our snippets have no <?php tag)
           appTheme,
           syntaxHighlighting(appHighlight),
+          ...(complete ? [autocompletion({ override: [complete] })] : []),
           EditorView.updateListener.of((u) => { if (u.docChanged && onChange) onChange(); }),
         ],
       }),

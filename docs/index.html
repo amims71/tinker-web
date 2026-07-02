@@ -161,6 +161,7 @@
   <div class="grid">
     <div class="card"><h3><span class="ic">◆</span>Works with any project</h3><p>Point it at any local Laravel app by path. The target needs nothing installed — the runner bootstraps it and uses its own PsySH/Tinker if present, with a plain-eval fallback otherwise.</p></div>
     <div class="card"><h3><span class="ic">◆</span>CodeMirror editor</h3><p>A bundled CodeMirror 6 editor with PHP syntax highlighting, a line-number gutter, bracket matching, and a dark theme that matches the app — served locally, no CDN. Press <code>⌘/Ctrl+↵</code> to run.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>Code completion</h3><p>Autocomplete for the target's class names (inserting the FQCN), your buffer's variables, and static <code>Class::</code> methods and constants — enumerated from the Composer classmap and reflection, with no app boot.</p></div>
     <div class="card"><h3><span class="ic">◆</span>Collapsible rich dumps</h3><p>Return values and <code>dump()</code>/<code>dd()</code> render as VarDumper's interactive, <strong>collapsible</strong> HTML with Tinker casters — click to expand Eloquent models and arrays. <code>dd()</code>/<code>exit()</code>/<code>die()</code> stop the run cleanly with a marker; echoed output is captured separately.</p></div>
     <div class="card"><h3><span class="ic">◆</span>Live auto-run &amp; notebook</h3><p>Opt into Auto-run to re-evaluate as you finish each statement. Snippets run as a notebook — each top-level statement gets its own result cell, and state persists within a run.</p></div>
     <div class="card"><h3><span class="ic">◆</span>Local &amp; locked down</h3><p>Binds <code>127.0.0.1</code> only, requires a random per-session token, and enforces a Host-header allowlist against DNS-rebinding. Your machine, your apps.</p></div>
@@ -199,7 +200,7 @@ tinker-web --no-open       <span class="cmt"># don't auto-open the browser</span
   <h2>Roadmap</h2>
   <p class="sub">The engine is done and validated. What's next:</p>
   <div class="grid">
-    <div class="card"><h3>Autocomplete / IntelliSense<span class="soon">soon</span></h3><p>Completion for the target's classes, methods, properties, and variables, powered by reflection over the booted app.</p></div>
+    <div class="card"><h3>Instance-member completion<span class="soon">soon</span></h3><p>Complete methods and properties after <code>$var-></code> by inferring the variable's type — extending the class-name, variable, and static <code>Class::</code> completion that already ships.</p></div>
     <div class="card"><h3>Auto-import<span class="soon">soon</span></h3><p>Reference a class unqualified and have the matching <code>use</code> statement added for you.</p></div>
     <div class="card"><h3>Warm runner daemon<span class="soon">soon</span></h3><p>Keep each target booted and fork per eval for instant, sub-boot execution.</p></div>
     <div class="card"><h3>Stateful REPL session<span class="soon">soon</span></h3><p>Keep one long-lived process per target so variables persist across evaluations and each statement runs exactly once — no repeated side effects, like a terminal <code>tinker</code>. Builds on the warm runner daemon.</p></div>

@@ -6,6 +6,7 @@ use Amims71\TinkerWeb\Connections\ConnectionStore;
 use Amims71\TinkerWeb\Http\Request;
 use Amims71\TinkerWeb\Http\Response;
 use Amims71\TinkerWeb\Runner\RunnerBridge;
+use Amims71\TinkerWeb\Runner\SymbolsBridge;
 use Amims71\TinkerWeb\Web\TokenGuard;
 
 /**
@@ -26,6 +27,7 @@ final class Server
     public function __construct(
         private TokenGuard $guard,
         private RunnerBridge $bridge,
+        private SymbolsBridge $symbols,
         private ConnectionStore $connections,
         private string $resourcesDir,
     ) {}
@@ -102,6 +104,8 @@ final class Server
             $request->method === 'GET' && $request->path === '/connections' => Response::json(['connections' => $this->connections->all()]),
             $request->method === 'POST' && $request->path === '/connections' => $this->addConnection($request),
             $request->method === 'POST' && $request->path === '/eval' => $this->eval($request),
+            $request->method === 'POST' && $request->path === '/symbols' => $this->symbols($request),
+            $request->method === 'POST' && $request->path === '/members' => $this->members($request),
             default => Response::json(['ok' => false, 'error' => ['message' => 'Not found']], 404),
         };
     }
@@ -119,6 +123,28 @@ final class Server
         $this->connections->remember($project);
 
         return Response::json($this->bridge->eval($project, $code));
+    }
+
+    private function symbols(Request $request): Response
+    {
+        $project = rtrim((string) ($request->json()['project'] ?? ''), '/');
+        if (! $this->connections->isValidProject($project)) {
+            return Response::json(['ok' => false, 'error' => ['message' => 'Not a Laravel project: '.$project]], 400);
+        }
+
+        return Response::json($this->symbols->classes($project));
+    }
+
+    private function members(Request $request): Response
+    {
+        $input = $request->json();
+        $project = rtrim((string) ($input['project'] ?? ''), '/');
+        $class = (string) ($input['class'] ?? '');
+        if (! $this->connections->isValidProject($project)) {
+            return Response::json(['ok' => false, 'error' => ['message' => 'Not a Laravel project: '.$project]], 400);
+        }
+
+        return Response::json($this->symbols->members($project, $class));
     }
 
     private function addConnection(Request $request): Response
