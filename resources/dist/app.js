@@ -5,6 +5,12 @@ const output = $('#output');
 const projectSel = $('#project');
 const statusEl = $('#status');
 const laravelEl = $('#laravel');
+const autorunEl = $('#autorun');
+const AUTORUN_KEY = 'tinker-web:autorun';
+let liveBlock = null;   // the coalesced auto-run block currently at the top
+let runSeq = 0;         // sequence guard: only the latest response is rendered
+let lastCode = null;    // skip re-running identical code
+let debounceTimer = null;
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -34,45 +40,96 @@ $('#add-btn').onclick = async () => {
   projectSel.innerHTML = options(res.connections || []);
 };
 
-async function run() {
+async function run(live = false) {
   const project = projectSel.value;
-  if (!project) { setStatus('add a project first', true); return; }
-  setStatus('running…');
+  if (!project) { if (!live) setStatus('add a project first', true); return; }
+  const code = editor.value;
+  if (live && code.trim() === '') return;
+
+  const seq = ++runSeq;
+  lastCode = code;
+  if (!live) setStatus('running…');
   const t0 = performance.now();
   let env;
   try {
-    env = await api('/eval', { method: 'POST', body: JSON.stringify({ project, code: editor.value }) });
+    env = await api('/eval', { method: 'POST', body: JSON.stringify({ project, code }) });
   } catch (e) {
-    setStatus('request failed', true);
+    if (seq === runSeq) setStatus(live ? '… offline' : 'request failed', !live);
     return;
   }
-  render(env, Math.round(performance.now() - t0));
+  if (seq !== runSeq) return; // a newer run superseded this one
+
+  // While typing, suppress half-written snippets instead of flashing errors.
+  if (live && env.ok && (env.kind === 'incomplete' || env.kind === 'parse-error')) {
+    setStatus('… ' + env.kind);
+    return;
+  }
+
+  const ms = Math.round(performance.now() - t0);
+  const previousLive = liveBlock;
+  const block = render(env, ms); // prepends the new block
+  if (live) {
+    if (previousLive && previousLive.parentNode) previousLive.remove(); // coalesce: drop the old live block
+    block.classList.add('live');
+    liveBlock = block;
+  } else {
+    if (liveBlock) liveBlock.classList.remove('live'); // un-tag the prior live block so no stray outline lingers
+    liveBlock = null; // a manual run becomes permanent history
+  }
 }
 
 function render(env, ms) {
   if (env.laravel) laravelEl.textContent = 'Laravel ' + env.laravel;
 
   const block = document.createElement('div');
-  block.className = 'result ' + (env.ok ? 'ok' : 'err');
-  let html = '';
 
-  if (env.output) html += `<div class="out-label">output</div><pre class="out">${escapeHtml(env.output)}</pre>`;
-
-  if (env.ok) {
-    if (env.kind === 'incomplete') html += `<pre class="note">… incomplete input</pre>`;
-    else if (env.kind === 'no-value') html += `<pre class="note">✓ (no return value)</pre>`;
-    else html += `<pre class="value">${escapeHtml(env.result_text || 'null')}</pre>`;
-    setStatus(`ok · ${ms}ms`);
-  } else {
+  if (!env.ok) {
+    // non-user failure (bad project / runner crash)
+    block.className = 'run-block err';
     const e = env.error || {};
-    html += `<pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre>`;
+    block.innerHTML = `<div class="result err"><pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre></div>`;
     setStatus(`error · ${ms}ms`, true);
+    return placeBlock(block);
   }
 
-  block.innerHTML = html;
+  const cells = env.cells || [];
+  let ok = true;
+  if (cells.length) {
+    block.innerHTML = cells.map((c) => renderCell(c, () => { ok = false; })).join('');
+  } else if (env.kind === 'incomplete') {
+    block.innerHTML = '<div class="result ok"><pre class="note">… incomplete input</pre></div>';
+  } else if (env.kind === 'parse-error') {
+    ok = false;
+    const e = env.error || {};
+    block.innerHTML = `<div class="result err"><pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre></div>`;
+  } else {
+    block.innerHTML = '<div class="result ok"><pre class="note">✓ (no statements)</pre></div>';
+  }
+  block.className = 'run-block ' + (ok ? 'ok' : 'err');
+  setStatus(ok ? `ok · ${ms}ms` : `error · ${ms}ms`, !ok);
+  return placeBlock(block);
+}
+
+function renderCell(c, markErr) {
+  let html = '<div class="result ' + (c.kind === 'exception' ? 'err' : 'ok') + '">';
+  if (c.output) html += `<div class="out-label">output</div><pre class="out">${escapeHtml(c.output)}</pre>`;
+  if (c.kind === 'exception') {
+    markErr();
+    const e = c.error || {};
+    html += `<pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre>`;
+  } else if (c.kind === 'no-value') {
+    html += `<pre class="note">✓ (no return value)</pre>`;
+  } else {
+    html += `<pre class="value">${escapeHtml(c.result_text || 'null')}</pre>`;
+  }
+  return html + '</div>';
+}
+
+function placeBlock(block) {
   const placeholder = output.querySelector('.placeholder');
   if (placeholder) placeholder.remove();
   output.prepend(block);
+  return block;
 }
 
 function setStatus(text, err = false) {
@@ -83,7 +140,7 @@ function escapeHtml(s) { return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp
 function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
 
 editor.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run(false); }
   if (e.key === 'Tab') {
     e.preventDefault();
     const s = editor.selectionStart, en = editor.selectionEnd;
@@ -91,6 +148,26 @@ editor.addEventListener('keydown', (e) => {
     editor.selectionStart = editor.selectionEnd = s + 4;
   }
 });
-$('#run-btn').onclick = run;
+$('#run-btn').onclick = () => run(false);
+
+autorunEl.checked = localStorage.getItem(AUTORUN_KEY) === '1';
+autorunEl.addEventListener('change', () => {
+  clearTimeout(debounceTimer); // cancel any pending live-run so toggling off can't fire one
+  localStorage.setItem(AUTORUN_KEY, autorunEl.checked ? '1' : '0');
+  if (autorunEl.checked) {
+    run(true);
+  } else if (liveBlock) {
+    liveBlock.classList.remove('live'); // toggle off: drop the dashed accent, stop tracking
+    liveBlock = null;
+  }
+});
+
+editor.addEventListener('input', () => {
+  if (!autorunEl.checked) return;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    if (autorunEl.checked && editor.value !== lastCode) run(true); // re-check: user may have toggled off during the wait
+  }, 400);
+});
 
 loadConnections();

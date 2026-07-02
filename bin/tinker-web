@@ -33,7 +33,7 @@ foreach ($args as $arg) {
 
 $connections = ConnectionStore::default();
 
-$project = $project !== null ? rtrim($project, '/') : getcwd();
+$project = $project !== null ? ConnectionStore::resolve($project) : getcwd();
 if ($project !== false && $connections->isValidProject($project)) {
     $connections->remember($project);
 }

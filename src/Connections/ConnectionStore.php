@@ -19,6 +19,23 @@ final class ConnectionStore
         return new self($dir.'/connections.json');
     }
 
+    /** Resolve a possibly-relative path to an absolute one; fall back to the trimmed input. */
+    public static function resolve(string $path): string
+    {
+        if ($path === '') {
+            return '';
+        }
+
+        $trimmed = rtrim($path, '/');
+        if ($trimmed === '') {
+            $trimmed = '/'; // input was the root (all slashes) — don't let realpath('') fall back to cwd
+        }
+
+        $real = realpath($trimmed);
+
+        return $real !== false ? $real : $trimmed;
+    }
+
     /** @return string[] absolute project paths, most-recent first */
     public function all(): array
     {

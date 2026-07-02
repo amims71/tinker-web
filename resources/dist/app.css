@@ -28,6 +28,8 @@ button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
 .run { background: var(--accent); color: #05233a; border-color: var(--accent); font-weight: 700; }
 .hint { color: var(--muted); font-size: 12px; }
+.toggle { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.toggle input { width: auto; }
 kbd { background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; }
 
 .split { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
@@ -52,6 +54,11 @@ kbd { background: var(--panel2); border: 1px solid var(--border); border-radius:
 .value { color: var(--text); }
 .note { color: var(--muted); }
 .error { color: var(--err); }
+
+/* per-run block of cells; own class so it can't collide with #run-btn's .run styling */
+.run-block { margin-bottom: 14px; }
+.run-block > .result + .result { margin-top: 6px; }
+.run-block.live { outline: 1px dashed var(--border); outline-offset: 2px; }
 
 .statusbar { display: flex; gap: 10px; padding: 5px 14px; background: var(--panel); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 #status.err { color: var(--err); }

@@ -11,6 +11,9 @@
 use Symfony\Component\VarDumper\Cloner\VarCloner;
 use Symfony\Component\VarDumper\Dumper\CliDumper;
 use Symfony\Component\VarDumper\Dumper\HtmlDumper;
+use Amims71\TinkerWeb\Runner\StatementSplitter;
+
+require_once __DIR__.'/StatementSplitter.php';
 
 $raw = stream_get_contents(STDIN) ?: '';
 $in = json_decode($raw, true) ?: [];
@@ -70,19 +73,84 @@ $render = function ($value) use ($casters): array {
     ];
 };
 
-// --- clean (implicit-return the last expression) + eval + capture ---
-$cleaned = null;
+// dump()/dd() default to writing straight to php://stdout, which — unlike echo — ob_start()
+// cannot intercept; route them through $render+echo instead so the output lands in the cell.
+unset($_SERVER['VAR_DUMPER_FORMAT']); // else setHandler() no-ops and dump() writes raw to stdout, corrupting our JSON
+\Symfony\Component\VarDumper\VarDumper::setHandler(static function ($value) use ($render): void {
+    echo $render($value)['text'], "\n";
+});
+
+/**
+ * Evaluate top-level statements in one shared scope so state persists within the run.
+ * Each statement becomes a cell (its captured output + value), or an exception cell that
+ * stops the run — mirroring how a script aborts on an uncaught throwable.
+ *
+ * @param string[] $__statements
+ * @return array<int, array<string,mixed>>
+ */
+function tinkerweb_notebook(array $__statements, callable $__render): array
+{
+    $__cells = [];
+    $__preamble = '';
+
+    foreach ($__statements as $__stmt) {
+        // use/namespace declarations don't carry across separate eval() units — replay the
+        // effective ones before each statement, and show a no-value cell for the declaration.
+        if (StatementSplitter::isDeclaration($__stmt)) {
+            $__preamble .= StatementSplitter::preambleFor($__stmt);
+            $__cells[] = ['kind' => 'no-value', 'output' => '', 'result_text' => '', 'result_html' => ''];
+            continue;
+        }
+
+        $__body = rtrim(trim($__stmt), ';');
+        ob_start();
+        try {
+            try {
+                // An expression (incl. assignment) yields a value AND mutates the shared scope.
+                $__value = eval($__preamble.'return '.$__body.';');
+                $__hasValue = true;
+            } catch (\ParseError $__pe) {
+                // Not an expression (control structure, echo, declaration) — run as-is, no value.
+                eval($__preamble.$__stmt.';');
+                $__value = null;
+                $__hasValue = false;
+            }
+
+            $__rendered = $__hasValue ? $__render($__value) : ['text' => '', 'html' => ''];
+            $__cells[] = [
+                'kind' => $__hasValue ? 'value' : 'no-value',
+                'output' => (string) ob_get_clean(),
+                'result_text' => $__rendered['text'],
+                'result_html' => $__rendered['html'],
+            ];
+        } catch (\Throwable $__e) {
+            $__cells[] = [
+                'kind' => 'exception',
+                'output' => (string) ob_get_clean(),
+                'error' => ['class' => get_class($__e), 'message' => $__e->getMessage()],
+            ];
+            break; // stop the run at the first runtime error
+        }
+    }
+
+    return $__cells;
+}
+
+// --- completeness / parse gate: decide incomplete vs parse-error before splitting ---
 if (class_exists(\Psy\CodeCleaner::class)) {
     try {
         $cleaned = (new \Psy\CodeCleaner())->clean([$code]);
     } catch (\Throwable $e) {
-        $respond(['ok' => false, 'kind' => 'parse-error', 'error' => ['class' => get_class($e), 'message' => $e->getMessage()]]);
+        $respond(['ok' => true, 'kind' => 'parse-error', 'cells' => [], 'error' => ['class' => get_class($e), 'message' => $e->getMessage()]]);
     }
     if ($cleaned === false) {
-        $respond(['ok' => true, 'kind' => 'incomplete', 'output' => '', 'result_text' => '', 'result_html' => '']);
+        $respond(['ok' => true, 'kind' => 'incomplete', 'cells' => []]);
     }
+} elseif (! StatementSplitter::isBalanced($code)) {
+    $respond(['ok' => true, 'kind' => 'incomplete', 'cells' => []]);
 }
 
+// --- convert warnings/notices to exceptions so a bad statement surfaces as an exception cell ---
 set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
     if (! (error_reporting() & $severity)) {
         return false;
@@ -90,31 +158,13 @@ set_error_handler(static function (int $severity, string $message, string $file,
     throw new \ErrorException($message, 0, $severity, $file, $line);
 });
 
-ob_start();
-try {
-    $value = $cleaned !== null ? eval($cleaned) : eval('return '.$code.';');
-    $output = ob_get_clean();
-    restore_error_handler();
+$cells = tinkerweb_notebook(StatementSplitter::split($code), $render);
 
-    $isNoValue = class_exists(\Psy\CodeCleaner\NoReturnValue::class) && $value instanceof \Psy\CodeCleaner\NoReturnValue;
-    $rendered = $isNoValue ? ['text' => '', 'html' => ''] : $render($value);
+restore_error_handler();
 
-    $respond([
-        'ok' => true,
-        'kind' => $isNoValue ? 'no-value' : 'value',
-        'output' => $output,
-        'result_text' => $rendered['text'],
-        'result_html' => $rendered['html'],
-        'laravel' => $app->version(),
-    ]);
-} catch (\Throwable $e) {
-    $output = ob_get_clean();
-    restore_error_handler();
-
-    $respond([
-        'ok' => false,
-        'kind' => 'exception',
-        'output' => $output,
-        'error' => ['class' => get_class($e), 'message' => $e->getMessage()],
-    ]);
-}
+$respond([
+    'ok' => true,
+    'kind' => 'value',
+    'cells' => $cells,
+    'laravel' => $app->version(),
+]);
