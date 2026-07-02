@@ -91,18 +91,27 @@ unset($_SERVER['VAR_DUMPER_FORMAT']); // else setHandler() no-ops and dump() wri
 function tinkerweb_notebook(array $__statements, callable $__render): array
 {
     $__cells = [];
+    $__preamble = '';
 
     foreach ($__statements as $__stmt) {
+        // use/namespace declarations don't carry across separate eval() units — replay the
+        // effective ones before each statement, and show a no-value cell for the declaration.
+        if (StatementSplitter::isDeclaration($__stmt)) {
+            $__preamble .= StatementSplitter::preambleFor($__stmt);
+            $__cells[] = ['kind' => 'no-value', 'output' => '', 'result_text' => '', 'result_html' => ''];
+            continue;
+        }
+
         $__body = rtrim(trim($__stmt), ';');
         ob_start();
         try {
             try {
                 // An expression (incl. assignment) yields a value AND mutates the shared scope.
-                $__value = eval('return '.$__body.';');
+                $__value = eval($__preamble.'return '.$__body.';');
                 $__hasValue = true;
             } catch (\ParseError $__pe) {
                 // Not an expression (control structure, echo, declaration) — run as-is, no value.
-                eval($__stmt.';');
+                eval($__preamble.$__stmt.';');
                 $__value = null;
                 $__hasValue = false;
             }

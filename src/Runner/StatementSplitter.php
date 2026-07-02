@@ -55,6 +55,60 @@ final class StatementSplitter
         return $depth === 0;
     }
 
+    /** True when a top-level statement is a `use` import or `namespace` declaration. */
+    public static function isDeclaration(string $statement): bool
+    {
+        return in_array(self::firstToken($statement), [T_USE, T_NAMESPACE], true);
+    }
+
+    /**
+     * Text to replay before later eval()s for a use/namespace declaration — they do not carry
+     * across separate eval() compilation units. Returns the trimmed source (with '; ') for an
+     * effective declaration (a namespace, or a compound/aliased use), or '' for a no-effect
+     * declaration (a bare global `use Foo;`) or a non-declaration. A no-effect `use` is skipped
+     * deliberately: replaying it would emit a "has no effect" warning that the runner turns into
+     * an exception.
+     */
+    public static function preambleFor(string $statement): string
+    {
+        $first = self::firstToken($statement);
+
+        if ($first === T_NAMESPACE) {
+            return rtrim(trim($statement), ';').'; ';
+        }
+        if ($first !== T_USE) {
+            return '';
+        }
+
+        foreach (token_get_all('<?php '.$statement) as $token) {
+            if (is_array($token)
+                && in_array($token[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NS_SEPARATOR, T_AS], true)) {
+                return rtrim(trim($statement), ';').'; ';
+            }
+        }
+
+        return '';
+    }
+
+    /** First significant token id (skipping the open tag and whitespace/comments), or null. */
+    private static function firstToken(string $statement): ?int
+    {
+        foreach (token_get_all('<?php '.$statement) as $i => $token) {
+            if ($i === 0) {
+                continue;
+            }
+            if (! is_array($token)) {
+                return null;
+            }
+            if (in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            return $token[0];
+        }
+
+        return null;
+    }
+
     /**
      * Bracket-depth change for one token. Some openers are compound tokens whose matching
      * closer is a plain char (interpolation '{$x}', '${x}', and '#[' attributes), so they

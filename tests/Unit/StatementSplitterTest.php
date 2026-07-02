@@ -50,3 +50,21 @@ it('reports balance correctly with string interpolation', function () {
 it('tracks depth through PHP attributes', function () {
     expect(StatementSplitter::isBalanced('#[Attr] function f() {}'))->toBeTrue();
 });
+
+it('identifies use and namespace as declarations', function () {
+    expect(StatementSplitter::isDeclaration('use App\Models\User;'))->toBeTrue();
+    expect(StatementSplitter::isDeclaration('use Foo;'))->toBeTrue();
+    expect(StatementSplitter::isDeclaration('namespace App;'))->toBeTrue();
+    expect(StatementSplitter::isDeclaration('$a = 1;'))->toBeFalse();
+    expect(StatementSplitter::isDeclaration('User::count()'))->toBeFalse();
+    expect(StatementSplitter::isDeclaration('foreach ($x as $y) { echo $y; }'))->toBeFalse();
+});
+
+it('replays only declarations that have an effect', function () {
+    expect(StatementSplitter::preambleFor('use App\Models\User;'))->toBe('use App\Models\User; ');
+    expect(StatementSplitter::preambleFor('use App\Models\User as U;'))->toBe('use App\Models\User as U; ');
+    expect(StatementSplitter::preambleFor('use ArrayObject as AO;'))->toBe('use ArrayObject as AO; ');
+    expect(StatementSplitter::preambleFor('namespace App\Foo;'))->toBe('namespace App\Foo; ');
+    expect(StatementSplitter::preambleFor('use ArrayObject;'))->toBe(''); // no effect, skip
+    expect(StatementSplitter::preambleFor('$a = 1;'))->toBe('');
+});
