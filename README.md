@@ -56,7 +56,9 @@ Write PHP in the editor and press **⌘/Ctrl + ↵** to run — or flip on **Aut
 live as you finish each statement. Snippets run as a **notebook**: each top-level statement becomes
 its own result cell (state persists within a run), and `dump()`/`dd()` output and return values
 render as VarDumper's **collapsible, interactive** HTML — click to expand Eloquent models and
-arrays. `dd()`/`exit()`/`die()` stop the run cleanly with a marker instead of erroring.
+arrays. `dd()`/`exit()`/`die()` stop the run cleanly with a marker instead of erroring. The editor
+autocompletes the target's class names (inserting the FQCN), your buffer's variables, and static
+`Class::` methods/constants — sourced from the Composer classmap and reflection, with no app boot.
 
 ## Security
 
@@ -71,7 +73,7 @@ Only run it on your own machine against apps you trust. Rendering a model shows 
 
 ## Roadmap
 
-- Autocomplete/IntelliSense and auto-import in the editor (reflection over the booted target app).
+- Instance-member completion after `$var->` (type inference) and auto-import — building on the class-name, variable, and static `Class::` completion that ships now.
 - Warm runner daemon per target, plus a stateful REPL session (variables persist across evals).
 - Refuse/warn when the target's `APP_ENV` is `production`.
 
