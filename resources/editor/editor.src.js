@@ -26,6 +26,14 @@ const appTheme = EditorView.theme(
       backgroundColor: 'rgba(108,199,255,0.2)', outline: 'none',
     },
     '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--mono)' },
+    '.cm-tooltip.cm-tooltip-autocomplete': {
+      background: 'var(--panel2)', border: '1px solid var(--border)', borderRadius: '6px',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--mono)', maxHeight: '16em' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { color: 'var(--text)', padding: '2px 6px' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { background: 'var(--accent)', color: '#05233a' },
+    '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal' },
+    '.cm-completionMatchedText': { color: 'var(--accent)', textDecoration: 'none', fontWeight: '700' },
   },
   { dark: true }
 );

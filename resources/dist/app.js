@@ -22,15 +22,18 @@ async function api(path, opts = {}) {
 
 // --- completion data (fetched once per project, cached) ---
 let classList = [];
+let symSeq = 0;         // sequence guard: only the latest /symbols response updates classList
 const memberCache = new Map();
 const KEYWORDS = ['return','function','fn','use','new','match','foreach','for','while','if','else','elseif','switch','case','throw','class','static','public','private','protected','instanceof','array','null','true','false'];
 
 async function loadSymbols(project) {
+  const seq = ++symSeq;
   if (!project) { classList = []; return; }
   try {
     const r = await api('/symbols', { method: 'POST', body: JSON.stringify({ project }) });
+    if (seq !== symSeq) return; // a newer project switch superseded this fetch
     classList = r && r.ok ? r.classes : [];
-  } catch (e) { classList = []; }
+  } catch (e) { if (seq === symSeq) classList = []; }
 }
 
 async function loadMembers(project, fqcn) {
