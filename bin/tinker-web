@@ -3,6 +3,7 @@
 
 use Amims71\TinkerWeb\Connections\ConnectionStore;
 use Amims71\TinkerWeb\Runner\RunnerBridge;
+use Amims71\TinkerWeb\Runner\SymbolsBridge;
 use Amims71\TinkerWeb\Server;
 use Amims71\TinkerWeb\Web\TokenGuard;
 
@@ -48,7 +49,8 @@ $boundPort = (int) substr(strrchr(stream_socket_get_name($socket, false), ':'), 
 
 $guard = TokenGuard::random($boundPort);
 $bridge = new RunnerBridge(PHP_BINARY, $root.'/src/Runner/runner.php');
-$server = new Server($guard, $bridge, $connections, $root.'/resources');
+$symbols = new SymbolsBridge(PHP_BINARY, $root.'/src/Runner/symbols.php');
+$server = new Server($guard, $bridge, $symbols, $connections, $root.'/resources');
 
 $url = "http://127.0.0.1:{$boundPort}/?t=".$guard->token();
 
