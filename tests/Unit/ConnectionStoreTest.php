@@ -47,3 +47,21 @@ it('validates a project by its autoloader and bootstrap file', function () {
     array_map('unlink', [$project.'/vendor/autoload.php', $project.'/bootstrap/app.php']);
     array_map('rmdir', [$project.'/vendor', $project.'/bootstrap', $project]);
 });
+
+it('resolves a relative path to its realpath and strips a trailing slash', function () {
+    $sub = $this->dir.'/nested';
+    mkdir($sub);
+    $prev = getcwd();
+    chdir($this->dir);
+    try {
+        expect(ConnectionStore::resolve('nested'))->toBe(realpath($sub));
+        expect(ConnectionStore::resolve('./nested/'))->toBe(realpath($sub));
+    } finally {
+        chdir($prev);
+        rmdir($sub);
+    }
+});
+
+it('falls back to the trimmed input for a non-existent path', function () {
+    expect(ConnectionStore::resolve('/no/such/path/'))->toBe('/no/such/path');
+});
