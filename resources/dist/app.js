@@ -1,6 +1,6 @@
 const token = new URLSearchParams(location.search).get('t') || '';
 const $ = (s) => document.querySelector(s);
-const editor = $('#editor');
+const editorEl = $('#editor');
 const output = $('#output');
 const projectSel = $('#project');
 const statusEl = $('#status');
@@ -43,7 +43,7 @@ $('#add-btn').onclick = async () => {
 async function run(live = false) {
   const project = projectSel.value;
   if (!project) { if (!live) setStatus('add a project first', true); return; }
-  const code = editor.value;
+  const code = editorApi.getDoc();
   if (live && code.trim() === '') return;
 
   const seq = ++runSeq;
@@ -164,15 +164,6 @@ function runScripts(el) {
   });
 }
 
-editor.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run(false); }
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const s = editor.selectionStart, en = editor.selectionEnd;
-    editor.value = editor.value.slice(0, s) + '    ' + editor.value.slice(en);
-    editor.selectionStart = editor.selectionEnd = s + 4;
-  }
-});
 $('#run-btn').onclick = () => run(false);
 
 autorunEl.checked = localStorage.getItem(AUTORUN_KEY) === '1';
@@ -187,12 +178,18 @@ autorunEl.addEventListener('change', () => {
   }
 });
 
-editor.addEventListener('input', () => {
-  if (!autorunEl.checked) return;
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    if (autorunEl.checked && editor.value !== lastCode) run(true); // re-check: user may have toggled off during the wait
-  }, 400);
+// --- editor: CodeMirror 6 via the vendored bundle (owns ⌘/Ctrl+↵, Tab, and change events) ---
+const editorApi = TinkerEditor.create(editorEl, {
+  doc: 'User::count()',
+  onRun: () => run(false),
+  onChange: () => {
+    if (!autorunEl.checked) return;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      if (autorunEl.checked && editorApi.getDoc() !== lastCode) run(true); // re-check: toggled off during the wait
+    }, 400);
+  },
 });
+editorApi.focus();
 
 loadConnections();
