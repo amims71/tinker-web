@@ -34,11 +34,18 @@ $ tinker-web ~/code/my-app
 composer global require amims71/tinker-web     # then ensure ~/.composer/vendor/bin (or ~/.config/composer/vendor/bin) is on your PATH
 ```
 
+**Update** to the latest release later:
+
+```bash
+composer global update amims71/tinker-web
+```
+
 Or clone and run directly:
 
 ```bash
 git clone https://github.com/amims71/tinker-web && cd tinker-web && composer install
 php bin/tinker-web /path/to/app
+# update a clone later: git pull && composer install
 ```
 
 ## Usage
