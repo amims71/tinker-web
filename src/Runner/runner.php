@@ -73,11 +73,16 @@ $render = function ($value) use ($casters): array {
     ];
 };
 
-// dump()/dd() default to writing straight to php://stdout, which — unlike echo — ob_start()
-// cannot intercept; route them through $render+echo instead so the output lands in the cell.
+// dump()/dd() default to writing straight to php://stdout, which ob_start() cannot intercept.
+// Collect each dumped value as a header-less VarDumper HTML fragment in a per-statement sink
+// (the page already has the vendored Sfdump JS/CSS), kept separate from plain echo output.
 unset($_SERVER['VAR_DUMPER_FORMAT']); // else setHandler() no-ops and dump() writes raw to stdout, corrupting our JSON
-\Symfony\Component\VarDumper\VarDumper::setHandler(static function ($value) use ($render): void {
-    echo $render($value)['text'], "\n";
+$dumpSink = new class {
+    /** @var string[] */
+    public array $items = [];
+};
+\Symfony\Component\VarDumper\VarDumper::setHandler(static function ($value) use ($render, $dumpSink): void {
+    $dumpSink->items[] = $render($value)['html'];
 });
 
 /**
@@ -88,7 +93,7 @@ unset($_SERVER['VAR_DUMPER_FORMAT']); // else setHandler() no-ops and dump() wri
  * @param string[] $__statements
  * @return array<int, array<string,mixed>>
  */
-function tinkerweb_notebook(array $__statements, callable $__render): array
+function tinkerweb_notebook(array $__statements, callable $__render, object $__dumpSink): array
 {
     $__cells = [];
     $__preamble = '';
@@ -98,11 +103,12 @@ function tinkerweb_notebook(array $__statements, callable $__render): array
         // effective ones before each statement, and show a no-value cell for the declaration.
         if (StatementSplitter::isDeclaration($__stmt)) {
             $__preamble .= StatementSplitter::preambleFor($__stmt);
-            $__cells[] = ['kind' => 'no-value', 'output' => '', 'result_text' => '', 'result_html' => ''];
+            $__cells[] = ['kind' => 'no-value', 'output' => '', 'dumps' => [], 'result_text' => '', 'result_html' => ''];
             continue;
         }
 
         $__body = rtrim(trim($__stmt), ';');
+        $__dumpSink->items = []; // dumps belong to this statement only
         ob_start();
         try {
             try {
@@ -120,6 +126,7 @@ function tinkerweb_notebook(array $__statements, callable $__render): array
             $__cells[] = [
                 'kind' => $__hasValue ? 'value' : 'no-value',
                 'output' => (string) ob_get_clean(),
+                'dumps' => $__dumpSink->items,
                 'result_text' => $__rendered['text'],
                 'result_html' => $__rendered['html'],
             ];
@@ -127,6 +134,7 @@ function tinkerweb_notebook(array $__statements, callable $__render): array
             $__cells[] = [
                 'kind' => 'exception',
                 'output' => (string) ob_get_clean(),
+                'dumps' => $__dumpSink->items,
                 'error' => ['class' => get_class($__e), 'message' => $__e->getMessage()],
             ];
             break; // stop the run at the first runtime error
@@ -158,7 +166,7 @@ set_error_handler(static function (int $severity, string $message, string $file,
     throw new \ErrorException($message, 0, $severity, $file, $line);
 });
 
-$cells = tinkerweb_notebook(StatementSplitter::split($code), $render);
+$cells = tinkerweb_notebook(StatementSplitter::split($code), $render, $dumpSink);
 
 restore_error_handler();
 

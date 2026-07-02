@@ -113,14 +113,16 @@ function render(env, ms) {
 function renderCell(c, markErr) {
   let html = '<div class="result ' + (c.kind === 'exception' ? 'err' : 'ok') + '">';
   if (c.output) html += `<div class="out-label">output</div><pre class="out">${escapeHtml(c.output)}</pre>`;
+  (c.dumps || []).forEach((d) => { html += `<div class="dump">${uniqueizeDump(d)}</div>`; });
   if (c.kind === 'exception') {
     markErr();
     const e = c.error || {};
     html += `<pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre>`;
   } else if (c.kind === 'no-value') {
-    html += `<pre class="note">✓ (no return value)</pre>`;
+    if (!c.output && !(c.dumps && c.dumps.length)) html += `<pre class="note">✓ (no return value)</pre>`;
   } else {
-    html += `<pre class="value">${escapeHtml(c.result_text || 'null')}</pre>`;
+    if (c.result_html) html += `<div class="dump">${uniqueizeDump(c.result_html)}</div>`;
+    else html += `<pre class="value">${escapeHtml(c.result_text || 'null')}</pre>`;
   }
   return html + '</div>';
 }
@@ -129,6 +131,7 @@ function placeBlock(block) {
   const placeholder = output.querySelector('.placeholder');
   if (placeholder) placeholder.remove();
   output.prepend(block);
+  runScripts(block); // wire up any injected VarDumper dumps (elements are now in the DOM)
   return block;
 }
 
@@ -138,6 +141,24 @@ function setStatus(text, err = false) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+
+let dumpSeq = 0;
+// Give each injected VarDumper fragment a page-unique dump id so dumps from different
+// cells/runs never collide on getElementById. A fragment has one base id (sf-dump-N);
+// derived ref ids share that prefix, so replacing the base string rewrites them consistently.
+function uniqueizeDump(html) {
+  const m = html.match(/sf-dump-\d+/);
+  if (!m) return html;
+  return html.split(m[0]).join('sf-dump-tw-' + ++dumpSeq);
+}
+// innerHTML does not execute <script>; re-create them so each fragment's Sfdump("id") init runs.
+function runScripts(el) {
+  el.querySelectorAll('script').forEach((old) => {
+    const s = document.createElement('script');
+    s.textContent = old.textContent;
+    old.replaceWith(s);
+  });
+}
 
 editor.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run(false); }

@@ -55,6 +55,9 @@ kbd { background: var(--panel2); border: 1px solid var(--border); border-radius:
 .note { color: var(--muted); }
 .error { color: var(--err); }
 
+.dump { padding: 8px 14px; overflow-x: auto; }
+.dump pre.sf-dump { margin: 0; padding: 0; }
+
 /* per-run block of cells; own class so it can't collide with #run-btn's .run styling */
 .run-block { margin-bottom: 14px; }
 .run-block > .result + .result { margin-top: 6px; }
