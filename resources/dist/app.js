@@ -88,7 +88,7 @@ async function phpComplete(context) {
     const q = idM.text.replace(/^\\/, '').toLowerCase();
     const matches = classList.filter((c) => c.toLowerCase().includes(q));
     matches.sort((a, b) => classRank(a) - classRank(b) || a.length - b.length);
-    const options = matches.slice(0, 50).map((c) => ({ label: c, type: 'class', apply: '\\' + c }));
+    const options = matches.slice(0, 50).map((c) => ({ label: c, type: 'class', apply: '\\' + c, boost: 99 - classRank(c) * 33 }));
     for (const k of KEYWORDS) if (k.startsWith(q)) options.push({ label: k, type: 'keyword' });
     return options.length ? { from: idM.from, options } : null;
   }
@@ -270,4 +270,4 @@ const editorApi = TinkerEditor.create(editorEl, {
 editorApi.focus();
 
 loadConnections().then(() => loadSymbols(projectSel.value));
-projectSel.addEventListener('change', () => { memberCache.clear(); loadSymbols(projectSel.value); });
+projectSel.addEventListener('change', () => { classList = []; memberCache.clear(); loadSymbols(projectSel.value); });
