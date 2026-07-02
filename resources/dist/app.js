@@ -114,7 +114,7 @@ function render(env, ms) {
 function renderCell(c, markErr) {
   let html = '<div class="result ' + (c.kind === 'exception' ? 'err' : 'ok') + '">';
   if (c.output) html += `<div class="out-label">output</div><pre class="out">${escapeHtml(c.output)}</pre>`;
-  (c.dumps || []).forEach((d) => { html += `<div class="dump">${uniqueizeDump(d)}</div>`; });
+  (c.dumps || []).forEach((d) => { html += wrapDump(d); });
   if (c.kind === 'exception') {
     markErr();
     const e = c.error || {};
@@ -124,7 +124,7 @@ function renderCell(c, markErr) {
   } else if (c.kind === 'halted') {
     html += `<pre class="note halt">⛔ execution stopped (dd)</pre>`;
   } else {
-    if (c.result_html) html += `<div class="dump">${uniqueizeDump(c.result_html)}</div>`;
+    if (c.result_html) html += wrapDump(c.result_html);
     else html += `<pre class="value">${escapeHtml(c.result_text || 'null')}</pre>`;
   }
   return html + '</div>';
@@ -154,6 +154,7 @@ function uniqueizeDump(html) {
   if (!m) return html;
   return html.split(m[0]).join('sf-dump-tw-' + ++dumpSeq);
 }
+function wrapDump(html) { return `<div class="dump">${uniqueizeDump(html)}</div>`; }
 // innerHTML does not execute <script>; re-create them so each fragment's Sfdump("id") init runs.
 function runScripts(el) {
   el.querySelectorAll('script').forEach((old) => {

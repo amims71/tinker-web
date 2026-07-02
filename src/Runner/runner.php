@@ -155,6 +155,7 @@ function tinkerweb_notebook(array $__statements, callable $__render, object $__d
 $run->laravel = $app->version();
 
 register_shutdown_function(static function () use ($run, $dumpSink): void {
+    restore_error_handler(); // drop the warning->exception handler so a warning in this net can't throw during shutdown
     if ($run->responded) {
         return; // a normal or gated response already emitted the envelope
     }
@@ -166,6 +167,8 @@ register_shutdown_function(static function () use ($run, $dumpSink): void {
     }
     // Best-effort: a debug target's own fatal renderer (Whoops/Collision) registers its shutdown
     // handler during bootstrap and may run before this one, so a genuine fatal can still bypass us.
+    // A memory-exhaustion fatal may also leave the net unable to allocate for json_encode, so
+    // stdout can come back empty — RunnerBridge treats empty/invalid stdout as a runner-error.
     $fatal = error_get_last();
     if ($fatal !== null && in_array($fatal['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
         fwrite(STDOUT, json_encode(['ok' => false, 'kind' => 'runner-error', 'cells' => $run->cells, 'error' => ['class' => 'FatalError', 'message' => $fatal['message']]], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
