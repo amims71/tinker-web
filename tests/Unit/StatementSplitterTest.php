@@ -35,3 +35,18 @@ it('reports balance for the incomplete gate', function () {
     expect(StatementSplitter::isBalanced('if (true) { echo 1; }'))->toBeTrue();
     expect(StatementSplitter::isBalanced('User::count()'))->toBeTrue();
 });
+
+it('tracks depth through curly-brace string interpolation', function () {
+    expect(StatementSplitter::split('$s = "value: {$obj->prop}"; strlen($s)'))
+        ->toBe(['$s = "value: {$obj->prop}";', 'strlen($s)']);
+});
+
+it('reports balance correctly with string interpolation', function () {
+    expect(StatementSplitter::isBalanced('$s = "{$x}";'))->toBeTrue();
+    // the interpolation must not cancel a genuinely unclosed brace
+    expect(StatementSplitter::isBalanced('$s = "{$x}"; foreach ($a as $b) {'))->toBeFalse();
+});
+
+it('tracks depth through PHP attributes', function () {
+    expect(StatementSplitter::isBalanced('#[Attr] function f() {}'))->toBeTrue();
+});

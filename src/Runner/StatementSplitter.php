@@ -24,19 +24,14 @@ final class StatementSplitter
 
         foreach ($tokens as $token) {
             $buffer .= is_array($token) ? $token[1] : $token;
+            $depth += self::depthDelta($token);
 
-            if (! is_array($token)) {
-                if ($token === '{' || $token === '(' || $token === '[') {
-                    $depth++;
-                } elseif ($token === '}' || $token === ')' || $token === ']') {
-                    $depth--;
-                } elseif ($token === ';' && $depth === 0) {
-                    $trimmed = trim($buffer);
-                    if ($trimmed !== '' && $trimmed !== ';') {
-                        $statements[] = $trimmed;
-                    }
-                    $buffer = '';
+            if ($token === ';' && $depth === 0) {
+                $trimmed = trim($buffer);
+                if ($trimmed !== '' && $trimmed !== ';') {
+                    $statements[] = $trimmed;
                 }
+                $buffer = '';
             }
         }
 
@@ -54,16 +49,30 @@ final class StatementSplitter
         $depth = 0;
 
         foreach (@token_get_all('<?php '.$code) as $token) {
-            if (is_array($token)) {
-                continue;
-            }
-            if ($token === '{' || $token === '(' || $token === '[') {
-                $depth++;
-            } elseif ($token === '}' || $token === ')' || $token === ']') {
-                $depth--;
-            }
+            $depth += self::depthDelta($token);
         }
 
         return $depth === 0;
+    }
+
+    /**
+     * Bracket-depth change for one token. Some openers are compound tokens whose matching
+     * closer is a plain char (interpolation '{$x}', '${x}', and '#[' attributes), so they
+     * must be counted here or depth desyncs against the plain '}'/']' that closes them.
+     */
+    private static function depthDelta(array|string $token): int
+    {
+        if (is_array($token)) {
+            return match ($token[0]) {
+                T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES, T_ATTRIBUTE => 1,
+                default => 0,
+            };
+        }
+
+        return match ($token) {
+            '{', '(', '[' => 1,
+            '}', ')', ']' => -1,
+            default => 0,
+        };
     }
 }
