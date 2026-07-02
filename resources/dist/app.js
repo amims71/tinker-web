@@ -54,7 +54,7 @@ async function run(live = false) {
   try {
     env = await api('/eval', { method: 'POST', body: JSON.stringify({ project, code }) });
   } catch (e) {
-    if (seq === runSeq && !live) setStatus('request failed', true);
+    if (seq === runSeq) setStatus(live ? '… offline' : 'request failed', !live);
     return;
   }
   if (seq !== runSeq) return; // a newer run superseded this one
@@ -73,6 +73,7 @@ async function run(live = false) {
     block.classList.add('live');
     liveBlock = block;
   } else {
+    if (liveBlock) liveBlock.classList.remove('live'); // un-tag the prior live block so no stray outline lingers
     liveBlock = null; // a manual run becomes permanent history
   }
 }
@@ -151,15 +152,21 @@ $('#run-btn').onclick = () => run(false);
 
 autorunEl.checked = localStorage.getItem(AUTORUN_KEY) === '1';
 autorunEl.addEventListener('change', () => {
+  clearTimeout(debounceTimer); // cancel any pending live-run so toggling off can't fire one
   localStorage.setItem(AUTORUN_KEY, autorunEl.checked ? '1' : '0');
-  if (autorunEl.checked) run(true);
+  if (autorunEl.checked) {
+    run(true);
+  } else if (liveBlock) {
+    liveBlock.classList.remove('live'); // toggle off: drop the dashed accent, stop tracking
+    liveBlock = null;
+  }
 });
 
 editor.addEventListener('input', () => {
   if (!autorunEl.checked) return;
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
-    if (editor.value !== lastCode) run(true);
+    if (autorunEl.checked && editor.value !== lastCode) run(true); // re-check: user may have toggled off during the wait
   }, 400);
 });
 
