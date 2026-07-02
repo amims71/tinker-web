@@ -106,7 +106,8 @@ function render(env, ms) {
     block.innerHTML = '<div class="result ok"><pre class="note">✓ (no statements)</pre></div>';
   }
   block.className = 'run-block ' + (ok ? 'ok' : 'err');
-  setStatus(ok ? `ok · ${ms}ms` : `error · ${ms}ms`, !ok);
+  if (env.halted) { block.classList.add('stopped'); setStatus(`stopped · ${ms}ms`); }
+  else setStatus(ok ? `ok · ${ms}ms` : `error · ${ms}ms`, !ok);
   return placeBlock(block);
 }
 
@@ -120,6 +121,8 @@ function renderCell(c, markErr) {
     html += `<pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre>`;
   } else if (c.kind === 'no-value') {
     if (!c.output && !(c.dumps && c.dumps.length)) html += `<pre class="note">✓ (no return value)</pre>`;
+  } else if (c.kind === 'halted') {
+    html += `<pre class="note halt">⛔ execution stopped (dd)</pre>`;
   } else {
     if (c.result_html) html += `<div class="dump">${uniqueizeDump(c.result_html)}</div>`;
     else html += `<pre class="value">${escapeHtml(c.result_text || 'null')}</pre>`;

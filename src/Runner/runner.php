@@ -88,14 +88,14 @@ $dumpSink = new class {
 /**
  * Evaluate top-level statements in one shared scope so state persists within the run.
  * Each statement becomes a cell (its captured output + value), or an exception cell that
- * stops the run — mirroring how a script aborts on an uncaught throwable.
+ * stops the run — mirroring how a script aborts on an uncaught throwable. Cells are written
+ * to $__run->cells as they complete (not returned) so the shutdown net can see progress if
+ * a dd()/exit()/die() terminates the process mid-run.
  *
  * @param string[] $__statements
- * @return array<int, array<string,mixed>>
  */
-function tinkerweb_notebook(array $__statements, callable $__render, object $__dumpSink): array
+function tinkerweb_notebook(array $__statements, callable $__render, object $__dumpSink, object $__run): void
 {
-    $__cells = [];
     $__preamble = '';
 
     foreach ($__statements as $__stmt) {
@@ -103,7 +103,7 @@ function tinkerweb_notebook(array $__statements, callable $__render, object $__d
         // effective ones before each statement, and show a no-value cell for the declaration.
         if (StatementSplitter::isDeclaration($__stmt)) {
             $__preamble .= StatementSplitter::preambleFor($__stmt);
-            $__cells[] = ['kind' => 'no-value', 'output' => '', 'dumps' => [], 'result_text' => '', 'result_html' => ''];
+            $__run->cells[] = ['kind' => 'no-value', 'output' => '', 'dumps' => [], 'result_text' => '', 'result_html' => ''];
             continue;
         }
 
@@ -123,7 +123,7 @@ function tinkerweb_notebook(array $__statements, callable $__render, object $__d
             }
 
             $__rendered = $__hasValue ? $__render($__value) : ['text' => '', 'html' => ''];
-            $__cells[] = [
+            $__run->cells[] = [
                 'kind' => $__hasValue ? 'value' : 'no-value',
                 'output' => (string) ob_get_clean(),
                 'dumps' => $__dumpSink->items,
@@ -131,7 +131,7 @@ function tinkerweb_notebook(array $__statements, callable $__render, object $__d
                 'result_html' => $__rendered['html'],
             ];
         } catch (\Throwable $__e) {
-            $__cells[] = [
+            $__run->cells[] = [
                 'kind' => 'exception',
                 'output' => (string) ob_get_clean(),
                 'dumps' => $__dumpSink->items,
@@ -140,9 +140,35 @@ function tinkerweb_notebook(array $__statements, callable $__render, object $__d
             break; // stop the run at the first runtime error
         }
     }
-
-    return $__cells;
 }
+
+// Shared run state so the shutdown net can report cells accumulated before a dd()/exit()/die().
+$run = new class {
+    /** @var array<int,array<string,mixed>> */
+    public array $cells = [];
+    public bool $responded = false;
+    public string $laravel = '';
+};
+$run->laravel = $app->version();
+
+register_shutdown_function(static function () use ($run, $dumpSink): void {
+    if ($run->responded) {
+        return; // normal path already emitted the envelope
+    }
+    // dd()/exit()/die() (or a fatal) terminated mid-run. Drain buffered output so PHP does not
+    // flush it raw into our stdout, and capture the halted statement's plain output.
+    $out = '';
+    while (ob_get_level() > 0) {
+        $out .= (string) ob_get_clean();
+    }
+    $fatal = error_get_last();
+    if ($fatal !== null && in_array($fatal['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        fwrite(STDOUT, json_encode(['ok' => false, 'kind' => 'runner-error', 'cells' => $run->cells, 'error' => ['class' => 'FatalError', 'message' => $fatal['message']]], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
+        return;
+    }
+    $run->cells[] = ['kind' => 'halted', 'output' => $out, 'dumps' => $dumpSink->items];
+    fwrite(STDOUT, json_encode(['ok' => true, 'kind' => 'value', 'halted' => true, 'cells' => $run->cells, 'laravel' => $run->laravel], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
+});
 
 // --- completeness / parse gate: decide incomplete vs parse-error before splitting ---
 if (class_exists(\Psy\CodeCleaner::class)) {
@@ -166,13 +192,14 @@ set_error_handler(static function (int $severity, string $message, string $file,
     throw new \ErrorException($message, 0, $severity, $file, $line);
 });
 
-$cells = tinkerweb_notebook(StatementSplitter::split($code), $render, $dumpSink);
+tinkerweb_notebook(StatementSplitter::split($code), $render, $dumpSink, $run);
 
 restore_error_handler();
 
+$run->responded = true;
 $respond([
     'ok' => true,
     'kind' => 'value',
-    'cells' => $cells,
-    'laravel' => $app->version(),
+    'cells' => $run->cells,
+    'laravel' => $run->laravel,
 ]);
