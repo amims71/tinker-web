@@ -53,26 +53,54 @@ function render(env, ms) {
   if (env.laravel) laravelEl.textContent = 'Laravel ' + env.laravel;
 
   const block = document.createElement('div');
-  block.className = 'result ' + (env.ok ? 'ok' : 'err');
-  let html = '';
 
-  if (env.output) html += `<div class="out-label">output</div><pre class="out">${escapeHtml(env.output)}</pre>`;
-
-  if (env.ok) {
-    if (env.kind === 'incomplete') html += `<pre class="note">… incomplete input</pre>`;
-    else if (env.kind === 'no-value') html += `<pre class="note">✓ (no return value)</pre>`;
-    else html += `<pre class="value">${escapeHtml(env.result_text || 'null')}</pre>`;
-    setStatus(`ok · ${ms}ms`);
-  } else {
+  if (!env.ok) {
+    // non-user failure (bad project / runner crash)
+    block.className = 'run err';
     const e = env.error || {};
-    html += `<pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre>`;
+    block.innerHTML = `<div class="result err"><pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre></div>`;
     setStatus(`error · ${ms}ms`, true);
+    return placeBlock(block);
   }
 
-  block.innerHTML = html;
+  const cells = env.cells || [];
+  let ok = true;
+  if (cells.length) {
+    block.innerHTML = cells.map((c) => renderCell(c, () => { ok = false; })).join('');
+  } else if (env.kind === 'incomplete') {
+    block.innerHTML = '<div class="result ok"><pre class="note">… incomplete input</pre></div>';
+  } else if (env.kind === 'parse-error') {
+    ok = false;
+    const e = env.error || {};
+    block.innerHTML = `<div class="result err"><pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre></div>`;
+  } else {
+    block.innerHTML = '<div class="result ok"><pre class="note">✓ (no statements)</pre></div>';
+  }
+  block.className = 'run ' + (ok ? 'ok' : 'err');
+  setStatus(ok ? `ok · ${ms}ms` : `error · ${ms}ms`, !ok);
+  return placeBlock(block);
+}
+
+function renderCell(c, markErr) {
+  let html = '<div class="result ' + (c.kind === 'exception' ? 'err' : 'ok') + '">';
+  if (c.output) html += `<div class="out-label">output</div><pre class="out">${escapeHtml(c.output)}</pre>`;
+  if (c.kind === 'exception') {
+    markErr();
+    const e = c.error || {};
+    html += `<pre class="error">${escapeHtml((e.class ? e.class + ': ' : '') + (e.message || 'error'))}</pre>`;
+  } else if (c.kind === 'no-value') {
+    html += `<pre class="note">✓ (no return value)</pre>`;
+  } else {
+    html += `<pre class="value">${escapeHtml(c.result_text || 'null')}</pre>`;
+  }
+  return html + '</div>';
+}
+
+function placeBlock(block) {
   const placeholder = output.querySelector('.placeholder');
   if (placeholder) placeholder.remove();
   output.prepend(block);
+  return block;
 }
 
 function setStatus(text, err = false) {
