@@ -9,7 +9,9 @@ beforeEach(function () {
 });
 
 afterEach(function () {
-    @unlink($this->dir.'/connections.json');
+    if (is_file($this->dir.'/connections.json')) {
+        unlink($this->dir.'/connections.json');
+    }
     @rmdir($this->dir);
 });
 
@@ -64,4 +66,13 @@ it('resolves a relative path to its realpath and strips a trailing slash', funct
 
 it('falls back to the trimmed input for a non-existent path', function () {
     expect(ConnectionStore::resolve('/no/such/path/'))->toBe('/no/such/path');
+});
+
+it('resolves the root path to itself, not the cwd', function () {
+    expect(ConnectionStore::resolve('/'))->toBe('/');
+    expect(ConnectionStore::resolve('//'))->toBe('/');
+});
+
+it('returns an empty string for empty input', function () {
+    expect(ConnectionStore::resolve(''))->toBe('');
 });
