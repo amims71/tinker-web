@@ -53,12 +53,17 @@ kbd { background: var(--panel2); border: 1px solid var(--border); border-radius:
 .out { color: var(--muted); }
 .value { color: var(--text); }
 .note { color: var(--muted); }
+.note.halt { color: #ffa657; }
 .error { color: var(--err); }
+
+.dump { padding: 8px 14px; overflow-x: auto; }
+.dump pre.sf-dump { margin: 0; padding: 0; }
 
 /* per-run block of cells; own class so it can't collide with #run-btn's .run styling */
 .run-block { margin-bottom: 14px; }
 .run-block > .result + .result { margin-top: 6px; }
 .run-block.live { outline: 1px dashed var(--border); outline-offset: 2px; }
+.run-block.stopped { outline: 1px solid #ffa657; outline-offset: 2px; }
 
 .statusbar { display: flex; gap: 10px; padding: 5px 14px; background: var(--panel); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 #status.err { color: var(--err); }

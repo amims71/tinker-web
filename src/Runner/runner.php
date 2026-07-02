@@ -20,7 +20,16 @@ $in = json_decode($raw, true) ?: [];
 $project = rtrim((string) ($in['project'] ?? ''), '/');
 $code = (string) ($in['code'] ?? '');
 
-$respond = function (array $envelope): never {
+// Shared run state so the shutdown net can tell a normal/gated response from an uncaught halt.
+$run = new class {
+    /** @var array<int,array<string,mixed>> */
+    public array $cells = [];
+    public bool $responded = false;
+    public string $laravel = '';
+};
+
+$respond = function (array $envelope) use ($run): never {
+    $run->responded = true; // every explicit response marks us done, so the shutdown net stays silent
     fwrite(STDOUT, json_encode($envelope, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
     exit(0);
 };
@@ -73,24 +82,29 @@ $render = function ($value) use ($casters): array {
     ];
 };
 
-// dump()/dd() default to writing straight to php://stdout, which — unlike echo — ob_start()
-// cannot intercept; route them through $render+echo instead so the output lands in the cell.
+// dump()/dd() default to writing straight to php://stdout, which ob_start() cannot intercept.
+// Collect each dumped value as a header-less VarDumper HTML fragment in a per-statement sink
+// (the page already has the vendored Sfdump JS/CSS), kept separate from plain echo output.
 unset($_SERVER['VAR_DUMPER_FORMAT']); // else setHandler() no-ops and dump() writes raw to stdout, corrupting our JSON
-\Symfony\Component\VarDumper\VarDumper::setHandler(static function ($value) use ($render): void {
-    echo $render($value)['text'], "\n";
+$dumpSink = new class {
+    /** @var string[] */
+    public array $items = [];
+};
+\Symfony\Component\VarDumper\VarDumper::setHandler(static function ($value) use ($render, $dumpSink): void {
+    $dumpSink->items[] = $render($value)['html'];
 });
 
 /**
  * Evaluate top-level statements in one shared scope so state persists within the run.
  * Each statement becomes a cell (its captured output + value), or an exception cell that
- * stops the run — mirroring how a script aborts on an uncaught throwable.
+ * stops the run — mirroring how a script aborts on an uncaught throwable. Cells are written
+ * to $__run->cells as they complete (not returned) so the shutdown net can see progress if
+ * a dd()/exit()/die() terminates the process mid-run.
  *
  * @param string[] $__statements
- * @return array<int, array<string,mixed>>
  */
-function tinkerweb_notebook(array $__statements, callable $__render): array
+function tinkerweb_notebook(array $__statements, callable $__render, object $__dumpSink, object $__run): void
 {
-    $__cells = [];
     $__preamble = '';
 
     foreach ($__statements as $__stmt) {
@@ -98,11 +112,12 @@ function tinkerweb_notebook(array $__statements, callable $__render): array
         // effective ones before each statement, and show a no-value cell for the declaration.
         if (StatementSplitter::isDeclaration($__stmt)) {
             $__preamble .= StatementSplitter::preambleFor($__stmt);
-            $__cells[] = ['kind' => 'no-value', 'output' => '', 'result_text' => '', 'result_html' => ''];
+            $__run->cells[] = ['kind' => 'no-value', 'output' => '', 'dumps' => [], 'result_text' => '', 'result_html' => ''];
             continue;
         }
 
         $__body = rtrim(trim($__stmt), ';');
+        $__dumpSink->items = []; // dumps belong to this statement only
         ob_start();
         try {
             try {
@@ -117,24 +132,51 @@ function tinkerweb_notebook(array $__statements, callable $__render): array
             }
 
             $__rendered = $__hasValue ? $__render($__value) : ['text' => '', 'html' => ''];
-            $__cells[] = [
+            $__run->cells[] = [
                 'kind' => $__hasValue ? 'value' : 'no-value',
                 'output' => (string) ob_get_clean(),
+                'dumps' => $__dumpSink->items,
                 'result_text' => $__rendered['text'],
                 'result_html' => $__rendered['html'],
             ];
         } catch (\Throwable $__e) {
-            $__cells[] = [
+            $__run->cells[] = [
                 'kind' => 'exception',
                 'output' => (string) ob_get_clean(),
+                'dumps' => $__dumpSink->items,
                 'error' => ['class' => get_class($__e), 'message' => $__e->getMessage()],
             ];
             break; // stop the run at the first runtime error
         }
     }
-
-    return $__cells;
 }
+
+// The run-state holder is created up top (so $respond can flag it); just record the version here.
+$run->laravel = $app->version();
+
+register_shutdown_function(static function () use ($run, $dumpSink): void {
+    restore_error_handler(); // drop the warning->exception handler so a warning in this net can't throw during shutdown
+    if ($run->responded) {
+        return; // a normal or gated response already emitted the envelope
+    }
+    // dd()/exit()/die() (or a fatal) terminated mid-run. Drain buffered output so PHP does not
+    // flush it raw into our stdout, and capture the halted statement's plain output.
+    $out = '';
+    while (ob_get_level() > 0) {
+        $out .= (string) ob_get_clean();
+    }
+    // Best-effort: a debug target's own fatal renderer (Whoops/Collision) registers its shutdown
+    // handler during bootstrap and may run before this one, so a genuine fatal can still bypass us.
+    // A memory-exhaustion fatal may also leave the net unable to allocate for json_encode, so
+    // stdout can come back empty — RunnerBridge treats empty/invalid stdout as a runner-error.
+    $fatal = error_get_last();
+    if ($fatal !== null && in_array($fatal['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        fwrite(STDOUT, json_encode(['ok' => false, 'kind' => 'runner-error', 'cells' => $run->cells, 'error' => ['class' => 'FatalError', 'message' => $fatal['message']]], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
+        return;
+    }
+    $run->cells[] = ['kind' => 'halted', 'output' => $out, 'dumps' => $dumpSink->items];
+    fwrite(STDOUT, json_encode(['ok' => true, 'kind' => 'value', 'halted' => true, 'cells' => $run->cells, 'laravel' => $run->laravel], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES));
+});
 
 // --- completeness / parse gate: decide incomplete vs parse-error before splitting ---
 if (class_exists(\Psy\CodeCleaner::class)) {
@@ -158,13 +200,13 @@ set_error_handler(static function (int $severity, string $message, string $file,
     throw new \ErrorException($message, 0, $severity, $file, $line);
 });
 
-$cells = tinkerweb_notebook(StatementSplitter::split($code), $render);
+tinkerweb_notebook(StatementSplitter::split($code), $render, $dumpSink, $run);
 
 restore_error_handler();
 
 $respond([
     'ok' => true,
     'kind' => 'value',
-    'cells' => $cells,
-    'laravel' => $app->version(),
+    'cells' => $run->cells,
+    'laravel' => $run->laravel,
 ]);
