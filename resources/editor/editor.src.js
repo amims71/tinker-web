@@ -55,7 +55,7 @@ window.TinkerEditor = {
           runKey,
           basicSetup,
           keymap.of([indentWithTab]),
-          php(),
+          php({ plain: true }), // parse the whole doc as PHP (our snippets have no <?php tag)
           appTheme,
           syntaxHighlighting(appHighlight),
           EditorView.updateListener.of((u) => { if (u.docChanged && onChange) onChange(); }),
